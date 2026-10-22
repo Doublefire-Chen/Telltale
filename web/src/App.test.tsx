@@ -11,7 +11,7 @@ describe('App', () => {
     render(<App />)
 
     expect(await screen.findByRole('heading', { name: 'Set an admin password' })).toBeTruthy()
-    expect(screen.getByText('sudo telltale-dashboard admin set-password')).toBeTruthy()
+    expect(screen.getByText('sudo -u telltale telltale-dashboard admin set-password')).toBeTruthy()
     expect(screen.queryByLabelText('Password')).toBeNull()
   })
 

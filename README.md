@@ -1,0 +1,145 @@
+# Telltale
+
+**English** · [简体中文](README.zh-CN.md)
+
+A lightweight, self-hosted monitor for your VPSes. A small **Agent** on each
+machine reports CPU, memory, disk, swap, load, network Traffic and Bandwidth,
+uptime and system details to a **Dashboard** that shows them live and keeps
+history. A telltale shows a state without changing anything, and that is the
+whole idea:
+
+> **Telltale observes and never acts.**
+
+The Agent sends data out and acts on nothing that comes back. There is no
+WebSSH, no remote command execution, no file manager, no remote
+configuration and no self-update — not as options, not ever. Nothing on the
+Dashboard side can run code on, reconfigure or upgrade your machines, and an
+upstream release can never break your fleet on its own. See
+[why](docs/adr/0001-agent-is-one-way.md).
+
+## Features
+
+- **Live Status page**: every Host with its flag, system, uptime, CPU, load,
+  memory, swap, disk, Bandwidth and Traffic, updating as Reports arrive (every
+  2 seconds by default); Offline within three missed intervals.
+- **History**: charts for 1 hour, 24 hours, 7 days and 30 days, kept in
+  SQLite as raw Reports, 1-minute and 15-minute averages.
+- **Both IP addresses** of each Host and their countries, learned from the
+  Agent's own connections to the Dashboard — no third-party lookups.
+- **Private by default**, or a public Status page that never shows IP
+  addresses or Hidden Hosts.
+- **Upgrades never break a fleet**: old Agents keep working with new
+  Dashboards, and the other way round ([protocol](docs/protocol.md)).
+- **Light**: the Agent is a single static binary needing no root; it uses
+  around 10–15 MB of memory and a fraction of a percent of one core.
+- **English and Simplified Chinese** UI.
+- Agent for **Linux, Windows and macOS** (amd64 and arm64); Dashboard for Linux.
+
+## Install
+
+Binaries are attached to each [release](https://github.com/Doublefire-Chen/Telltale/releases)
+with SHA-256 checksums. To build from source instead you need Go and Node.js:
+
+```sh
+make geoip   # download the DB-IP Lite country database to embed (optional)
+make build   # bin/telltale-dashboard and bin/telltale-agent
+```
+
+### 1. The Dashboard (Linux)
+
+```sh
+sudo install -m 0755 telltale-dashboard /usr/local/bin/
+sudo useradd --system --user-group --no-create-home --shell /usr/sbin/nologin telltale
+sudo install -D -m 0644 deploy/dashboard.toml /etc/telltale/dashboard.toml
+sudo install -m 0644 deploy/systemd/telltale-dashboard.service /etc/systemd/system/
+sudo systemctl enable --now telltale-dashboard
+
+# Create the admin account (username "admin"). There is no web setup wizard.
+sudo -u telltale telltale-dashboard admin set-password
+```
+
+The Dashboard listens on `127.0.0.1:8080` and `[::1]:8080`. Put a reverse
+proxy in front for HTTPS: [`deploy/nginx/telltale.conf`](deploy/nginx/telltale.conf)
+is a ready-made nginx config (HTTP/2, IPv4 and IPv6, WebSocket).
+
+**Give the Dashboard's name both an A and an AAAA record.** Each Agent
+reports once over IPv4 and once over IPv6, which is how the Dashboard learns
+both of a Host's addresses. An IPv4-only Dashboard only ever shows IPv4.
+
+### 2. Add a Host
+
+Log in, type a name under **Add Host** (or leave it blank to use the
+machine's hostname), and copy the config it shows. The Host token in it is
+shown **only once**; the Dashboard keeps just its hash. You can regenerate it
+later, which immediately revokes the old one.
+
+### 3. The Agent
+
+**Linux** — read [`deploy/install.sh`](deploy/install.sh) first; it is short
+and says exactly which files it touches.
+
+```sh
+sudo sh install.sh install --dashboard-url https://status.example.com --token tt_… --version vX.Y.Z
+# or, with a binary you already have: --binary ./telltale-agent
+```
+
+It creates an unprivileged `telltale-agent` user, writes the config readable
+only by that user, and starts a hardened systemd unit. To upgrade, run it
+again with just `--version` or `--binary`. To remove everything:
+`sudo sh install.sh uninstall`.
+
+**Windows** (as Administrator) — put `telltale-agent.exe` in
+`C:\Program Files\Telltale\`, save the config as
+`C:\ProgramData\Telltale\agent.toml`, then:
+
+```powershell
+& "C:\Program Files\Telltale\telltale-agent.exe" service install
+```
+
+It runs as LocalService; its logs are in the Event Viewer.
+
+**macOS** — put `telltale-agent` in `/usr/local/bin/`, save the config as
+`/etc/telltale/agent.toml`, then:
+
+```sh
+sudo telltale-agent service install
+```
+
+It runs as a hidden `_telltale-agent` user and logs to
+`/var/log/telltale-agent.log`. Uninstall with `service uninstall`
+(add `--purge` to delete the config too).
+
+The installers never touch your motd, shell profiles, `authorized_keys`,
+crontab, sysctl, firewall, DNS or package sources.
+
+### Upgrading
+
+Upgrade the Dashboard and the Agents independently, in any order. An Agent
+older than the Dashboard gets an "Agent outdated" badge and keeps working.
+Agents never update themselves.
+
+## Documentation
+
+- [Configuration reference](docs/configuration.md)
+- [The Agent–Dashboard protocol and its compatibility rules](docs/protocol.md)
+- [Glossary](CONTEXT.md): the project's terms — Agent, Dashboard, Host,
+  Report, Host Info, Traffic, Bandwidth, Offline…
+- [Architecture decisions](docs/adr/), including what Telltale will never do
+
+## Contributing
+
+Read [`CONTEXT.md`](CONTEXT.md) and [`docs/adr/`](docs/adr/) first. In
+particular, features that let the Dashboard act on a Host — remote shells or
+commands, file access, remote configuration, self-update — are out of scope
+permanently, not just for now.
+
+```sh
+make test   # Go and web tests
+./scripts/test-install-in-container.sh   # installer and systemd units (Docker)
+./scripts/test-nginx-in-container.sh     # the sample nginx config (Docker)
+```
+
+## License
+
+GPL-3.0. IP geolocation by [DB-IP](https://db-ip.com) (CC BY 4.0). Flags from
+[flag-icons](https://github.com/lipis/flag-icons) (MIT).

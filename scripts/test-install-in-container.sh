@@ -45,9 +45,9 @@ echo "starting the Dashboard under its hardened unit"
 run_in 'useradd --system --user-group --no-create-home --shell /usr/sbin/nologin telltale
 	install -m 0755 /tmp/telltale-dashboard /usr/local/bin/telltale-dashboard
 	mkdir -p /etc/telltale && install -m 0644 /tmp/dashboard.toml /etc/telltale/dashboard.toml
-	printf "container test pw\ncontainer test pw\n" | telltale-dashboard admin set-password >/dev/null
-	chown -R telltale:telltale /var/lib/telltale
-	systemctl daemon-reload && systemctl start telltale-dashboard
+	systemctl daemon-reload && systemctl enable --now telltale-dashboard
+	# As in the README: set the password as the telltale user, service running.
+	printf "container test pw\ncontainer test pw\n" | runuser -u telltale -- telltale-dashboard admin set-password >/dev/null
 	for i in $(seq 20); do curl -fs -o /dev/null http://127.0.0.1:8080/ && break; sleep 0.5; done'
 run_in 'systemctl is-active -q telltale-dashboard' || { run_in 'journalctl -u telltale-dashboard --no-pager | tail -20'; fail "Dashboard unit not active"; }
 ok "Dashboard runs under its hardened unit"
@@ -57,6 +57,8 @@ run_in 'test "$(stat -c %U:%a /var/lib/telltale)" = telltale:700' || fail "/var/
 run_in 'nsenter -t $(systemctl show -p MainPID --value telltale-dashboard) -m touch /etc/telltale/x 2>/dev/null' && fail "Dashboard can write outside its data directory"
 run_in 'nsenter -t $(systemctl show -p MainPID --value telltale-dashboard) -m touch /var/lib/telltale/x && rm /var/lib/telltale/x' || fail "Dashboard cannot write its data directory"
 ok "Dashboard can write only to /var/lib/telltale"
+run_in 'printf "x\nx\n" | telltale-dashboard admin set-password 2>&1 | grep -q "sudo -u telltale"' || fail "set-password as root did not point to the telltale user"
+ok "set-password as root refuses and names the right user"
 
 TOKEN=$(run_in 'curl -fs -c /tmp/jar -o /dev/null -X POST -H "Content-Type: application/json" -d "{\"username\":\"admin\",\"password\":\"container test pw\"}" http://127.0.0.1:8080/api/session
 	C="telltale_session=$(awk "\$6==\"telltale_session\"{print \$7}" /tmp/jar)"

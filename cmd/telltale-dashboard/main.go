@@ -150,6 +150,9 @@ func serve(cfg config.Config, stderr io.Writer) error {
 }
 
 func setPassword(cfg config.Config, stdin io.Reader, stdout io.Writer) error {
+	if err := checkDataDirOwner(cfg.DataDir); err != nil {
+		return err
+	}
 	read := lineReader(stdin, stdout)
 	if f, ok := stdin.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
 		read = func(prompt string) (string, error) {

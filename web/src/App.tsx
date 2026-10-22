@@ -99,7 +99,7 @@ function SetupRequired() {
       <h1>{t('setup.title')}</h1>
       <p>{t('setup.body')}</p>
       <pre>
-        <code>sudo telltale-dashboard admin set-password</code>
+        <code>sudo -u telltale telltale-dashboard admin set-password</code>
       </pre>
       <p>{t('setup.after')}</p>
     </section>
