@@ -48,3 +48,11 @@ jobs:
           go-version-file: go.mod
       - name: Agent and protocol tests (includes the collector smoke test)
         run: go test ./internal/agent/... ./internal/protocol/... ./cmd/telltale-agent/...
+      # Installs the Agent as a real system service, checks it reports to a
+      # Dashboard as its own unprivileged account, then uninstalls it.
+      - name: Service install test (Windows)
+        if: runner.os == 'Windows'
+        run: go test -tags servicetest -v -run TestService ./internal/e2e
+      - name: Service install test (macOS)
+        if: runner.os == 'macOS'
+        run: sudo -E env "PATH=$PATH" go test -tags servicetest -v -run TestService ./internal/e2e
