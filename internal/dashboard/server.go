@@ -1,5 +1,6 @@
 // Package dashboard implements the Dashboard's HTTP server: the web app, the
-// session API used by the Admin area, and the Status page API.
+// session and Admin area API, the Status page API with its live feed, and the
+// protocol v1 endpoints Agents report to.
 package dashboard
 
 import (
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Doublefire-Chen/Telltale/internal/dashboard/store"
+	v1 "github.com/Doublefire-Chen/Telltale/internal/protocol/v1"
 )
 
 // AdminUsername is the only account's fixed username.
@@ -52,6 +54,8 @@ type Server struct {
 	now    func() time.Time
 	logger *slog.Logger
 	logins *failureLimiter
+	latest latestReports
+	hub    hub
 	mux    *http.ServeMux
 }
 
@@ -76,6 +80,9 @@ func New(opts Options) *Server {
 	s.mux.Handle("POST /api/session", s.requireSetup(http.HandlerFunc(s.handleLogin)))
 	s.mux.Handle("DELETE /api/session", s.requireSetup(http.HandlerFunc(s.handleLogout)))
 	s.mux.Handle("GET /api/status", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleStatus))))
+	s.mux.Handle("GET /api/live", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleLive))))
+	s.mux.Handle("POST /api/hosts", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleAddHost))))
+	s.mux.HandleFunc("POST "+v1.ReportPath, s.handleReport)
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 	})
@@ -239,15 +246,6 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 	})
 	w.WriteHeader(http.StatusNoContent)
-}
-
-type statusResponse struct {
-	Hosts []struct{} `json:"hosts"`
-}
-
-// handleStatus serves the Status page data. Hosts arrive in a later slice.
-func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, statusResponse{Hosts: []struct{}{}})
 }
 
 const placeholderPage = `<!doctype html><meta charset="utf-8"><title>Telltale</title>

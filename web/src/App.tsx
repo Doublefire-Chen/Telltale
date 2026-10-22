@@ -1,7 +1,8 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { getSession, getStatus, login, logout, type LoginResult, type Session, type Status } from './api'
+import { getSession, login, logout, type LoginResult, type Session } from './api'
 import { languages } from './i18n'
+import { StatusPage } from './StatusPage'
 
 type View = { kind: 'loading' } | { kind: 'error' } | { kind: 'ready'; session: Session }
 
@@ -132,24 +133,5 @@ function Login({ onLoggedIn }: { onLoggedIn: () => Promise<void> }) {
         {t('login.submit')}
       </button>
     </form>
-  )
-}
-
-function StatusPage() {
-  const { t } = useTranslation()
-  const [status, setStatus] = useState<Status | null>(null)
-  const [failed, setFailed] = useState(false)
-
-  useEffect(() => {
-    getStatus().then(setStatus, () => setFailed(true))
-  }, [])
-
-  if (failed) return <p role="alert">{t('app.error')}</p>
-  if (!status) return <p>{t('app.loading')}</p>
-  return (
-    <section>
-      <h1>{t('status.title')}</h1>
-      {status.hosts.length === 0 && <p className="muted">{t('status.empty')}</p>}
-    </section>
   )
 }

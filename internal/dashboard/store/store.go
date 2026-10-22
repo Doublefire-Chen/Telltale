@@ -28,6 +28,12 @@ var migrations = []string{
 		token_hash BLOB PRIMARY KEY,
 		expires_at INTEGER NOT NULL
 	);`,
+	`CREATE TABLE hosts (
+		id         TEXT PRIMARY KEY,
+		name       TEXT NOT NULL,
+		token_hash BLOB NOT NULL UNIQUE,
+		created_at INTEGER NOT NULL
+	);`,
 }
 
 // Store is the Dashboard's persistent state.
@@ -144,4 +150,54 @@ func (s *Store) DeleteSession(ctx context.Context, tokenHash []byte) error {
 func (s *Store) DeleteExpiredSessions(ctx context.Context, now time.Time) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at <= ?`, now.Unix())
 	return err
+}
+
+// Host is a machine registered in the Dashboard.
+type Host struct {
+	ID        string
+	Name      string
+	CreatedAt time.Time
+}
+
+// CreateHost registers a Host with the hash of its token.
+func (s *Store) CreateHost(ctx context.Context, h Host, tokenHash []byte) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO hosts (id, name, token_hash, created_at) VALUES (?, ?, ?, ?)`,
+		h.ID, h.Name, tokenHash, h.CreatedAt.Unix())
+	return err
+}
+
+// Hosts returns all Hosts in the order they were added.
+func (s *Store) Hosts(ctx context.Context) ([]Host, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, created_at FROM hosts ORDER BY created_at, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var hosts []Host
+	for rows.Next() {
+		var h Host
+		var created int64
+		if err := rows.Scan(&h.ID, &h.Name, &created); err != nil {
+			return nil, err
+		}
+		h.CreatedAt = time.Unix(created, 0)
+		hosts = append(hosts, h)
+	}
+	return hosts, rows.Err()
+}
+
+// HostByTokenHash returns the Host whose token has this hash.
+func (s *Store) HostByTokenHash(ctx context.Context, tokenHash []byte) (Host, bool, error) {
+	var h Host
+	var created int64
+	err := s.db.QueryRowContext(ctx, `SELECT id, name, created_at FROM hosts WHERE token_hash = ?`, tokenHash).
+		Scan(&h.ID, &h.Name, &created)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Host{}, false, nil
+	}
+	if err != nil {
+		return Host{}, false, err
+	}
+	h.CreatedAt = time.Unix(created, 0)
+	return h, true, nil
 }

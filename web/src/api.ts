@@ -8,9 +8,35 @@ export type Session = {
 
 export type LoginResult = 'ok' | 'invalid_credentials' | 'rate_limited'
 
-export type Status = {
-  hosts: unknown[]
+export type Report = {
+  /** When the Dashboard received the Report, Unix ms. */
+  received_at: number
+  time: number
+  interval_ms: number
+  cpu_percent?: number
+  memory_used?: number
 }
+
+export type Host = {
+  id: string
+  name: string
+  report: Report | null
+}
+
+export type Status = {
+  hosts: Host[]
+}
+
+export type AddedHost = {
+  id: string
+  name: string
+  /** Shown once; the Dashboard keeps only its hash. */
+  token: string
+}
+
+export type LiveMessage =
+  | { type: 'report'; host_id: string; report: Report }
+  | { type: 'hosts_changed' }
 
 export class ApiError extends Error {
   constructor(
@@ -62,4 +88,14 @@ export async function logout(): Promise<void> {
 
 export async function getStatus(): Promise<Status> {
   return (await request('GET', '/api/status')).json()
+}
+
+export async function addHost(name: string): Promise<AddedHost> {
+  return (await request('POST', '/api/hosts', { name })).json()
+}
+
+/** liveURL is the WebSocket that pushes LiveMessages to the Status page. */
+export function liveURL(): string {
+  const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${scheme}//${location.host}/api/live`
 }

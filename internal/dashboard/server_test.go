@@ -35,15 +35,17 @@ func (c *fakeClock) Advance(d time.Duration) {
 }
 
 type harness struct {
-	t     *testing.T
-	store *store.Store
-	clock *fakeClock
-	srv   *httptest.Server
+	t       *testing.T
+	dataDir string
+	store   *store.Store
+	clock   *fakeClock
+	srv     *httptest.Server
 }
 
 func newHarness(t *testing.T, app fstest.MapFS) *harness {
 	t.Helper()
-	st, err := store.Open(t.TempDir())
+	dataDir := t.TempDir()
+	st, err := store.Open(dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +57,7 @@ func newHarness(t *testing.T, app fstest.MapFS) *harness {
 	}
 	srv := httptest.NewServer(dashboard.New(opts))
 	t.Cleanup(srv.Close)
-	return &harness{t: t, store: st, clock: clock, srv: srv}
+	return &harness{t: t, dataDir: dataDir, store: st, clock: clock, srv: srv}
 }
 
 func (h *harness) setPassword(password string) {
