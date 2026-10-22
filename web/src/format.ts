@@ -31,3 +31,17 @@ export function formatLoad(values: (number | undefined)[], lang: string): string
   const nf = new Intl.NumberFormat(lang, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return values.map((v) => nf.format(v!)).join(' ')
 }
+
+/** formatUsage shows "used / total", or just used while the total is unknown. */
+export function formatUsage(used: number | undefined, total: number | undefined, lang: string): string {
+  if (used === undefined) return unknown
+  if (total === undefined) return formatBytes(used, lang)
+  return `${formatBytes(used, lang)} / ${formatBytes(total, lang)}`
+}
+
+/** uptimeParts splits the time since bootTime (Unix seconds) into days, hours and minutes. */
+export function uptimeParts(bootTime: number, nowMs: number): { d: number; h: number; m: number } | undefined {
+  const seconds = Math.floor(nowMs / 1000) - bootTime
+  if (!Number.isFinite(seconds) || seconds < 0) return undefined
+  return { d: Math.floor(seconds / 86400), h: Math.floor((seconds % 86400) / 3600), m: Math.floor((seconds % 3600) / 60) }
+}

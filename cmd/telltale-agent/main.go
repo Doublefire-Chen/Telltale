@@ -13,11 +13,17 @@ import (
 	"syscall"
 
 	"github.com/Doublefire-Chen/Telltale/internal/agent"
+	"github.com/Doublefire-Chen/Telltale/internal/version"
 )
 
 func main() {
 	configPath := flag.String("config", agent.DefaultConfigPath(), "path to the config file")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println(version.Version)
+		return
+	}
 
 	cfg, err := agent.LoadConfig(*configPath)
 	if err != nil {
@@ -29,5 +35,5 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	collector := agent.SystemCollector{ExcludeInterfaces: cfg.ExcludeInterfaces}
-	agent.NewSender(cfg, collector, logger).Run(ctx)
+	agent.NewSender(cfg, collector, version.Version, logger).Run(ctx)
 }

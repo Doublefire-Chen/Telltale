@@ -22,6 +22,7 @@ import (
 
 	"github.com/Doublefire-Chen/Telltale/internal/dashboard/store"
 	v1 "github.com/Doublefire-Chen/Telltale/internal/protocol/v1"
+	"github.com/Doublefire-Chen/Telltale/internal/version"
 )
 
 // AdminUsername is the only account's fixed username.
@@ -45,18 +46,21 @@ type Options struct {
 	// Now returns the current time; defaults to time.Now. Tests inject a fake clock.
 	Now    func() time.Time
 	Logger *slog.Logger
+	// Version is this Dashboard's release version; defaults to version.Version.
+	Version string
 }
 
 // Server is the Dashboard's HTTP handler.
 type Server struct {
-	store  *store.Store
-	app    fs.FS
-	now    func() time.Time
-	logger *slog.Logger
-	logins *failureLimiter
-	latest latestReports
-	hub    hub
-	mux    *http.ServeMux
+	store   *store.Store
+	app     fs.FS
+	version string
+	now     func() time.Time
+	logger  *slog.Logger
+	logins  *failureLimiter
+	latest  latestReports
+	hub     hub
+	mux     *http.ServeMux
 }
 
 // New builds a Server from opts.
@@ -75,6 +79,10 @@ func New(opts Options) *Server {
 	if s.logger == nil {
 		s.logger = slog.New(slog.DiscardHandler)
 	}
+	s.version = opts.Version
+	if s.version == "" {
+		s.version = version.Version
+	}
 
 	s.mux.HandleFunc("GET /api/session", s.handleGetSession)
 	s.mux.Handle("POST /api/session", s.requireSetup(http.HandlerFunc(s.handleLogin)))
@@ -83,6 +91,7 @@ func New(opts Options) *Server {
 	s.mux.Handle("GET /api/live", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleLive))))
 	s.mux.Handle("POST /api/hosts", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleAddHost))))
 	s.mux.HandleFunc("POST "+v1.ReportPath, s.handleReport)
+	s.mux.HandleFunc("POST "+v1.HostInfoPath, s.handleHostInfo)
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 	})

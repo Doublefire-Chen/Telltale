@@ -28,13 +28,35 @@ export type Report = {
   tx_rate?: number
 }
 
+export type HostInfo = {
+  hostname?: string
+  os?: string
+  platform?: string
+  platform_version?: string
+  kernel_version?: string
+  arch?: string
+  cpu_model?: string
+  cpu_cores?: number
+  memory_total?: number
+  swap_total?: number
+  disk_total?: number
+  virtualization?: string
+  /** Unix seconds. */
+  boot_time?: number
+  agent_version?: string
+}
+
 export type Host = {
   id: string
+  /** Display name; empty means show the hostname. */
   name: string
+  host_info: HostInfo | null
   report: Report | null
+  agent_outdated: boolean
 }
 
 export type Status = {
+  dashboard_version: string
   hosts: Host[]
 }
 

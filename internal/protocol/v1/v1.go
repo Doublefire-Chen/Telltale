@@ -48,5 +48,34 @@ type Report struct {
 	NetTxBytes *uint64 `json:"net_tx_bytes,omitempty"`
 }
 
-// HostInfo is the static description of a Host. Its fields arrive in a later slice.
-type HostInfo struct{}
+// HostInfo is the static description of a Host. Agents send it at start,
+// whenever it changes, and periodically. Empty strings and nil pointers mean
+// unknown.
+type HostInfo struct {
+	// Hostname is the OS hostname.
+	Hostname string `json:"hostname,omitempty"`
+	// OS is the operating system family: "linux", "windows" or "darwin".
+	OS string `json:"os,omitempty"`
+	// Platform and PlatformVersion name the distribution or edition, e.g.
+	// "ubuntu" "24.04", "Microsoft Windows Server 2022" "10.0.20348", "darwin" "15.1".
+	Platform        string `json:"platform,omitempty"`
+	PlatformVersion string `json:"platform_version,omitempty"`
+	KernelVersion   string `json:"kernel_version,omitempty"`
+	// Arch is the machine architecture as the kernel reports it, e.g. "x86_64", "aarch64".
+	Arch string `json:"arch,omitempty"`
+	// CPUModel is the processor's model name; CPUCores counts logical cores.
+	CPUModel string `json:"cpu_model,omitempty"`
+	CPUCores *int   `json:"cpu_cores,omitempty"`
+	// MemoryTotal, SwapTotal and DiskTotal are capacities in bytes. DiskTotal
+	// covers the same filesystems as Report.DiskUsed.
+	MemoryTotal *uint64 `json:"memory_total,omitempty"`
+	SwapTotal   *uint64 `json:"swap_total,omitempty"`
+	DiskTotal   *uint64 `json:"disk_total,omitempty"`
+	// Virtualization is the hypervisor or container system the Host runs
+	// under (e.g. "kvm", "lxc", "docker"), when it can be detected.
+	Virtualization string `json:"virtualization,omitempty"`
+	// BootTime is when the Host last booted, in Unix seconds.
+	BootTime *int64 `json:"boot_time,omitempty"`
+	// AgentVersion is the Agent's release version.
+	AgentVersion string `json:"agent_version,omitempty"`
+}

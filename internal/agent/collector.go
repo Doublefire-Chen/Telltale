@@ -2,11 +2,14 @@ package agent
 
 import (
 	"context"
+	"os"
 	"path"
 	"runtime"
+	"strings"
 
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/host"
 	"github.com/shirou/gopsutil/v4/load"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/net"
@@ -22,6 +25,9 @@ type Collector interface {
 	// the caller. A metric that cannot be read is left nil rather than failing
 	// the whole Report.
 	Sample(ctx context.Context) v1.Report
+	// HostInfo returns the Host's static description. AgentVersion is filled
+	// in by the caller; anything that cannot be read is left empty.
+	HostInfo(ctx context.Context) v1.HostInfo
 }
 
 // DefaultExcludeInterfaces are network interfaces left out of Traffic by
@@ -72,17 +78,55 @@ func (c SystemCollector) Sample(ctx context.Context) v1.Report {
 			r.Load1, r.Load5, r.Load15 = &avg.Load1, &avg.Load5, &avg.Load15
 		}
 	}
-	r.DiskUsed = diskUsed(ctx)
+	r.DiskUsed, _ = diskUsage(ctx)
 	r.NetRxBytes, r.NetTxBytes = c.traffic(ctx)
 	return r
 }
 
-func diskUsed(ctx context.Context) *uint64 {
+func (SystemCollector) HostInfo(ctx context.Context) v1.HostInfo {
+	info := v1.HostInfo{OS: runtime.GOOS}
+	if name, err := os.Hostname(); err == nil {
+		info.Hostname = name
+	}
+	if platform, _, version, err := host.PlatformInformationWithContext(ctx); err == nil {
+		info.Platform, info.PlatformVersion = platform, version
+	}
+	if v, err := host.KernelVersionWithContext(ctx); err == nil {
+		info.KernelVersion = v
+	}
+	if a, err := host.KernelArch(); err == nil {
+		info.Arch = a
+	}
+	if cpus, err := cpu.InfoWithContext(ctx); err == nil && len(cpus) > 0 {
+		info.CPUModel = strings.TrimSpace(cpus[0].ModelName)
+	}
+	if n, err := cpu.CountsWithContext(ctx, true); err == nil && n > 0 {
+		info.CPUCores = &n
+	}
+	if vm, err := mem.VirtualMemoryWithContext(ctx); err == nil {
+		info.MemoryTotal = &vm.Total
+	}
+	if sw, err := mem.SwapMemoryWithContext(ctx); err == nil {
+		info.SwapTotal = &sw.Total
+	}
+	_, info.DiskTotal = diskUsage(ctx)
+	if system, role, err := host.VirtualizationWithContext(ctx); err == nil && role == "guest" {
+		info.Virtualization = system
+	}
+	if bt, err := host.BootTimeWithContext(ctx); err == nil && bt > 0 {
+		t := int64(bt)
+		info.BootTime = &t
+	}
+	return info
+}
+
+// diskUsage returns used and total bytes over real local filesystems.
+func diskUsage(ctx context.Context) (used, total *uint64) {
 	parts, err := disk.PartitionsWithContext(ctx, false)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
-	var usages []diskUsage
+	var usages []fsUsage
 	for _, p := range parts {
 		if !countedPartition(p, runtime.GOOS) {
 			continue
@@ -91,9 +135,9 @@ func diskUsed(ctx context.Context) *uint64 {
 		if err != nil {
 			continue
 		}
-		usages = append(usages, diskUsage{device: p.Device, total: u.Total, free: u.Free, used: u.Used})
+		usages = append(usages, fsUsage{device: p.Device, total: u.Total, free: u.Free, used: u.Used})
 	}
-	return sumDiskUsed(usages)
+	return sumDisk(usages)
 }
 
 // countedPartition reports whether a mounted filesystem is real local storage.
@@ -114,19 +158,19 @@ func countedPartition(p disk.PartitionStat, goos string) bool {
 	return true
 }
 
-type diskUsage struct {
+type fsUsage struct {
 	device            string
 	total, free, used uint64
 }
 
-// sumDiskUsed adds up used space, counting each device once. Volumes that
-// share one storage pool (APFS containers and the like) all report the pool's
-// size and free space, so identical (total, free) pairs are counted once too.
-func sumDiskUsed(usages []diskUsage) *uint64 {
+// sumDisk adds up used and total space, counting each device once. Volumes
+// that share one storage pool (APFS containers and the like) all report the
+// pool's size and free space, so identical (total, free) pairs count once too.
+func sumDisk(usages []fsUsage) (used, total *uint64) {
 	type pool struct{ total, free uint64 }
 	seenDevice := make(map[string]bool)
 	seenPool := make(map[pool]bool)
-	var sum uint64
+	var sumUsed, sumTotal uint64
 	var counted bool
 	for _, u := range usages {
 		key := pool{u.total, u.free}
@@ -135,13 +179,14 @@ func sumDiskUsed(usages []diskUsage) *uint64 {
 		}
 		seenDevice[u.device] = true
 		seenPool[key] = true
-		sum += u.used
+		sumUsed += u.used
+		sumTotal += u.total
 		counted = true
 	}
 	if !counted {
-		return nil
+		return nil, nil
 	}
-	return &sum
+	return &sumUsed, &sumTotal
 }
 
 func (c SystemCollector) traffic(ctx context.Context) (rx, tx *uint64) {

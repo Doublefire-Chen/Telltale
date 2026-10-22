@@ -76,6 +76,17 @@ func TestSystemCollectorSmoke(t *testing.T) {
 		t.Errorf("load average present=%v on %s", hasLoad, runtime.GOOS)
 	}
 
+	info := SystemCollector{}.HostInfo(context.Background())
+	if info.Hostname == "" || info.OS != runtime.GOOS || info.Arch == "" || info.KernelVersion == "" {
+		t.Errorf("host info identity incomplete: %+v", info)
+	}
+	if info.CPUCores == nil || *info.CPUCores < 1 || info.MemoryTotal == nil || info.DiskTotal == nil || info.BootTime == nil {
+		t.Errorf("host info capacities incomplete: %+v", info)
+	}
+	if info.DiskTotal != nil && r.DiskUsed != nil && *r.DiskUsed > *info.DiskTotal {
+		t.Errorf("disk used %d exceeds disk total %d", *r.DiskUsed, *info.DiskTotal)
+	}
+
 	// Excluding every interface leaves zero Traffic, not a missing value.
 	r = SystemCollector{ExcludeInterfaces: []string{"*"}}.Sample(context.Background())
 	if r.NetRxBytes == nil || *r.NetRxBytes != 0 {
@@ -83,8 +94,8 @@ func TestSystemCollectorSmoke(t *testing.T) {
 	}
 }
 
-func TestDiskUsedCountsEachStorageOnce(t *testing.T) {
-	got := sumDiskUsed([]diskUsage{
+func TestDiskCountsEachStorageOnce(t *testing.T) {
+	used, total := sumDisk([]fsUsage{
 		{device: "/dev/sda1", total: 100, free: 40, used: 60},
 		{device: "/dev/sda1", total: 100, free: 40, used: 60}, // bind mount of the same device
 		{device: "/dev/disk3s1", total: 500, free: 100, used: 400},
@@ -92,10 +103,10 @@ func TestDiskUsedCountsEachStorageOnce(t *testing.T) {
 		{device: "/dev/sdb1", total: 200, free: 150, used: 50},
 		{device: "/dev/disk1s2", total: 0, free: 0, used: 0},
 	})
-	if got == nil || *got != 60+400+50 {
-		t.Fatalf("disk used = %v, want 510", got)
+	if used == nil || *used != 60+400+50 || total == nil || *total != 100+500+200 {
+		t.Fatalf("disk used=%v total=%v, want 510 and 800", used, total)
 	}
-	if sumDiskUsed(nil) != nil {
+	if used, total := sumDisk(nil); used != nil || total != nil {
 		t.Fatal("no filesystems should give unknown, not zero")
 	}
 }

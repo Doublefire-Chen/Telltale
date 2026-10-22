@@ -66,11 +66,11 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
         return new Response(null, { status: 204 })
       }
       if (!state.authenticated) return json(401, { error: 'unauthenticated' })
-      if (path === '/api/status') return json(200, { hosts: state.hosts })
+      if (path === '/api/status') return json(200, { dashboard_version: 'v1.2.0', hosts: state.hosts })
       if (path === '/api/hosts' && method === 'POST') {
         const name = String(body.name).trim()
-        if (!name) return json(400, { error: 'invalid_name' })
-        const host = { id: `h${state.hosts.length + 1}`, name, report: null }
+        if (name.length > 64) return json(400, { error: 'invalid_name' })
+        const host: Host = { id: `h${state.hosts.length + 1}`, name, host_info: null, report: null, agent_outdated: false }
         state.hosts = [...state.hosts, host]
         return json(201, { id: host.id, name, token: 'tt_' + 'A'.repeat(43) })
       }

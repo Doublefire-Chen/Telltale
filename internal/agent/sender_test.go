@@ -18,11 +18,31 @@ import (
 
 const testToken = "tt_test-token"
 
-type fakeCollector struct{}
+// fakeCollector returns fixed metrics and a Host Info whose hostname tests can change.
+type fakeCollector struct {
+	mu       sync.Mutex
+	hostname string
+}
 
-func (fakeCollector) Sample(context.Context) v1.Report {
+func (*fakeCollector) Sample(context.Context) v1.Report {
 	cpu, mem := 12.5, uint64(512<<20)
 	return v1.Report{CPUPercent: &cpu, MemoryUsed: &mem}
+}
+
+func (c *fakeCollector) HostInfo(context.Context) v1.HostInfo {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	name := c.hostname
+	if name == "" {
+		name = "fake-host"
+	}
+	return v1.HostInfo{Hostname: name, OS: "linux"}
+}
+
+func (c *fakeCollector) setHostname(name string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.hostname = name
 }
 
 // received is one request as seen by the fake Dashboard.
@@ -31,25 +51,30 @@ type received struct {
 	proto                  int
 	header                 http.Header
 	report                 v1.Report
+	hostInfo               v1.HostInfo
 }
 
 // fakeDashboard records requests and answers each with respond.
 type fakeDashboard struct {
 	mu       sync.Mutex
 	requests []received
-	respond  func(w http.ResponseWriter)
+	respond  func(w http.ResponseWriter, r *http.Request)
 }
 
 func (d *fakeDashboard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
-	var rep v1.Report
-	json.Unmarshal(body, &rep)
+	got := received{method: r.Method, path: r.URL.Path, rawQuery: r.URL.RawQuery, proto: r.ProtoMajor, header: r.Header.Clone()}
+	if r.URL.Path == v1.HostInfoPath {
+		json.Unmarshal(body, &got.hostInfo)
+	} else {
+		json.Unmarshal(body, &got.report)
+	}
 	d.mu.Lock()
-	d.requests = append(d.requests, received{r.Method, r.URL.Path, r.URL.RawQuery, r.ProtoMajor, r.Header.Clone(), rep})
+	d.requests = append(d.requests, got)
 	respond := d.respond
 	d.mu.Unlock()
 	if respond != nil {
-		respond(w)
+		respond(w, r)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -61,22 +86,39 @@ func (d *fakeDashboard) snapshot() []received {
 	return append([]received(nil), d.requests...)
 }
 
-// runFor runs the sender until it has sent n requests (or a timeout).
-func runFor(t *testing.T, s *Sender, d *fakeDashboard, n int) []received {
+// onPath returns the requests to one endpoint.
+func onPath(reqs []received, path string) []received {
+	var out []received
+	for _, r := range reqs {
+		if r.path == path {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// runUntil runs the sender until done reports true for the requests so far (or a timeout).
+func runUntil(t *testing.T, s *Sender, d *fakeDashboard, done func([]received) bool) []received {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() { s.Run(ctx); close(done) }()
-	defer func() { cancel(); <-done }()
+	stopped := make(chan struct{})
+	go func() { s.Run(ctx); close(stopped) }()
+	defer func() { cancel(); <-stopped }()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if reqs := d.snapshot(); len(reqs) >= n {
+		if reqs := d.snapshot(); done(reqs) {
 			return reqs
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	t.Fatalf("got %d requests, want %d", len(d.snapshot()), n)
+	t.Fatalf("condition not met after %d requests", len(d.snapshot()))
 	return nil
+}
+
+// runFor runs the sender until it has sent n Reports.
+func runFor(t *testing.T, s *Sender, d *fakeDashboard, n int) []received {
+	t.Helper()
+	return runUntil(t, s, d, func(reqs []received) bool { return len(onPath(reqs, v1.ReportPath)) >= n })
 }
 
 func TestSendsReportsOverHTTP2WithBearerToken(t *testing.T) {
@@ -86,12 +128,15 @@ func TestSendsReportsOverHTTP2WithBearerToken(t *testing.T) {
 	srv.StartTLS()
 	defer srv.Close()
 
-	s := newSender(srv.URL+"/", testToken, 20*time.Millisecond, fakeCollector{}, nil, srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs)
+	s := newSender(srv.URL+"/", testToken, 20*time.Millisecond, "v1.2.3", &fakeCollector{}, nil, srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs)
 	reqs := runFor(t, s, d, 3)
 
+	if reqs[0].path != v1.HostInfoPath || reqs[0].hostInfo.Hostname != "fake-host" || reqs[0].hostInfo.AgentVersion != "v1.2.3" {
+		t.Fatalf("first request %s with Host Info %+v, want Host Info with the Agent version", reqs[0].path, reqs[0].hostInfo)
+	}
 	for _, r := range reqs {
-		if r.method != http.MethodPost || r.path != v1.ReportPath {
-			t.Fatalf("request %s %s, want POST %s", r.method, r.path, v1.ReportPath)
+		if r.method != http.MethodPost || (r.path != v1.ReportPath && r.path != v1.HostInfoPath) {
+			t.Fatalf("request %s %s", r.method, r.path)
 		}
 		if r.proto != 2 {
 			t.Fatalf("request used HTTP/%d, want HTTP/2", r.proto)
@@ -101,6 +146,9 @@ func TestSendsReportsOverHTTP2WithBearerToken(t *testing.T) {
 		}
 		if strings.Contains(r.rawQuery, testToken) || strings.Contains(r.path, testToken) {
 			t.Fatal("Host token appears in the URL")
+		}
+		if r.path != v1.ReportPath {
+			continue
 		}
 		if r.report.IntervalMS != 20 || r.report.Time == 0 {
 			t.Fatalf("report interval_ms=%d time=%d", r.report.IntervalMS, r.report.Time)
@@ -140,7 +188,7 @@ func TestIgnoresEverythingButTheStatusCode(t *testing.T) {
 	}
 	var i int
 	d := &fakeDashboard{}
-	d.respond = func(w http.ResponseWriter) {
+	d.respond = func(w http.ResponseWriter, _ *http.Request) {
 		responses[i%len(responses)](w)
 		i++
 	}
@@ -161,11 +209,18 @@ func TestIgnoresEverythingButTheStatusCode(t *testing.T) {
 	before := listDir(t, dir)
 	beforeCwd := listDir(t, cwd)
 
-	s := NewSender(cfg, fakeCollector{}, nil)
+	s := NewSender(cfg, &fakeCollector{}, "v1.2.3", nil)
 	s.interval = 20 * time.Millisecond
+	s.hostInfoCheck = 0 // re-read Host Info every tick, so it is sent under every kind of response
 	reqs := runFor(t, s, d, 2*len(responses)+1)
 
 	for _, r := range reqs {
+		if r.path == v1.HostInfoPath {
+			if r.header.Get("Authorization") != "Bearer "+testToken || r.header.Get("Cookie") != "" {
+				t.Fatal("Agent changed how it sends Host Info")
+			}
+			continue
+		}
 		if r.path != v1.ReportPath || r.header.Get("Authorization") != "Bearer "+testToken {
 			t.Fatalf("Agent changed what it sends: %s %q", r.path, r.header.Get("Authorization"))
 		}
@@ -191,10 +246,64 @@ func TestIgnoresEverythingButTheStatusCode(t *testing.T) {
 }
 
 func TestKeepsSendingWhenRejected(t *testing.T) {
-	d := &fakeDashboard{respond: func(w http.ResponseWriter) { w.WriteHeader(http.StatusUnauthorized) }}
+	d := &fakeDashboard{respond: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusUnauthorized) }}
 	srv := httptest.NewServer(d)
 	defer srv.Close()
-	runFor(t, newSender(srv.URL, testToken, 20*time.Millisecond, fakeCollector{}, nil, nil), d, 3)
+	runFor(t, newSender(srv.URL, testToken, 20*time.Millisecond, "dev", &fakeCollector{}, nil, nil), d, 3)
+}
+
+func TestHostInfoSentOnChangeAndRefresh(t *testing.T) {
+	d := &fakeDashboard{}
+	srv := httptest.NewServer(d)
+	defer srv.Close()
+	c := &fakeCollector{}
+	s := newSender(srv.URL, testToken, 10*time.Millisecond, "dev", c, nil, nil)
+	s.hostInfoCheck = 0
+
+	// Unchanged Host Info is not resent on every check.
+	reqs := runFor(t, s, d, 10)
+	if n := len(onPath(reqs, v1.HostInfoPath)); n != 1 {
+		t.Fatalf("unchanged Host Info sent %d times, want once", n)
+	}
+
+	// A change is sent on the next check.
+	c.setHostname("renamed")
+	reqs = runUntil(t, s, d, func(reqs []received) bool {
+		infos := onPath(reqs, v1.HostInfoPath)
+		return len(infos) >= 2 && infos[len(infos)-1].hostInfo.Hostname == "renamed"
+	})
+	if n := len(onPath(reqs, v1.HostInfoPath)); n != 2 {
+		t.Fatalf("Host Info sent %d times after one change, want 2", n)
+	}
+
+	// Once the refresh period passes, it is resent unchanged.
+	s.hostInfoRefresh = 0
+	runUntil(t, s, d, func(reqs []received) bool { return len(onPath(reqs, v1.HostInfoPath)) >= 4 })
+}
+
+func TestHostInfoRetriedUntilAccepted(t *testing.T) {
+	var mu sync.Mutex
+	failures := 3
+	d := &fakeDashboard{}
+	d.respond = func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		if r.URL.Path == v1.HostInfoPath && failures > 0 {
+			failures--
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+	srv := httptest.NewServer(d)
+	defer srv.Close()
+	s := newSender(srv.URL, testToken, 10*time.Millisecond, "dev", &fakeCollector{}, nil, nil)
+
+	reqs := runFor(t, s, d, 10)
+	// Three refusals, then one accepted send, then nothing more (unchanged).
+	if n := len(onPath(reqs, v1.HostInfoPath)); n != 4 {
+		t.Fatalf("Host Info sent %d times, want 4 (3 refused + 1 accepted)", n)
+	}
 }
 
 func listDir(t *testing.T, dir string) string {

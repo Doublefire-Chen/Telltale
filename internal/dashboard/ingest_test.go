@@ -114,9 +114,11 @@ func TestAddHostValidation(t *testing.T) {
 	h.setPassword(testPassword)
 	session := h.loginOK()
 
-	for _, name := range []string{"", "   ", strings.Repeat("名", 65)} {
-		body, _ := json.Marshal(map[string]string{"name": name})
-		expectError(t, h.do(http.MethodPost, "/api/hosts", string(body), session), http.StatusBadRequest, "invalid_name")
+	body, _ := json.Marshal(map[string]string{"name": strings.Repeat("名", 65)})
+	expectError(t, h.do(http.MethodPost, "/api/hosts", string(body), session), http.StatusBadRequest, "invalid_name")
+	// Blank means "use the hostname from Host Info".
+	if host := h.addHost(session, "   "); host.Name != "" {
+		t.Fatalf("blank name stored as %q", host.Name)
 	}
 	expectError(t, h.do(http.MethodPost, "/api/hosts", `{"name":"x"}`, nil), http.StatusUnauthorized, "unauthenticated")
 }

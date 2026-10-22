@@ -42,7 +42,7 @@ func TestAgentReportsToDashboard(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() { agent.NewSender(cfg, agent.SystemCollector{}, nil).Run(ctx); close(done) }()
+	go func() { agent.NewSender(cfg, agent.SystemCollector{}, "v0.0.0-test", nil).Run(ctx); close(done) }()
 	defer func() { cancel(); <-done }()
 
 	deadline := time.Now().Add(10 * time.Second)

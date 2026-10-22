@@ -25,6 +25,7 @@ import (
 	"github.com/Doublefire-Chen/Telltale/internal/dashboard"
 	"github.com/Doublefire-Chen/Telltale/internal/dashboard/config"
 	"github.com/Doublefire-Chen/Telltale/internal/dashboard/store"
+	"github.com/Doublefire-Chen/Telltale/internal/version"
 	"github.com/Doublefire-Chen/Telltale/web"
 )
 
@@ -39,8 +40,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	fl := flag.NewFlagSet("telltale-dashboard", flag.ContinueOnError)
 	fl.SetOutput(stderr)
 	configPath := fl.String("config", "", "path to the config file (default "+config.DefaultPath+")")
+	showVersion := fl.Bool("version", false, "print the version and exit")
 	if err := fl.Parse(args); err != nil {
 		return err
+	}
+	if *showVersion {
+		fmt.Fprintln(stdout, version.Version)
+		return nil
 	}
 
 	path, allowMissing := *configPath, false
