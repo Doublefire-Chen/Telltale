@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -81,6 +82,10 @@ func serve(cfg config.Config, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	retention, err := cfg.Retention()
+	if err != nil {
+		return err
+	}
 	geo, err := geoip.Open(cfg.GeoIPDB)
 	if err != nil {
 		return err
@@ -94,7 +99,7 @@ func serve(cfg config.Config, stderr io.Writer) error {
 		logger.Warn("web app not built into this binary; serving a placeholder page")
 	}
 	handler := dashboard.New(dashboard.Options{
-		Store: st, App: app, Logger: logger, TrustedProxies: proxies, GeoIP: geo,
+		Store: st, App: app, Logger: logger, TrustedProxies: proxies, GeoIP: geo, Retention: retention,
 	})
 	srv := &http.Server{
 		Handler:           handler,
@@ -125,16 +130,23 @@ func serve(cfg config.Config, stderr io.Writer) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go handler.Run(ctx)
+	ranDone := make(chan struct{})
+	runCtx, stopRun := context.WithCancel(context.Background())
+	go func() { handler.Run(runCtx); close(ranDone) }()
+	var serveErr error
 	select {
-	case err := <-errc:
-		return err
+	case serveErr = <-errc:
 	case <-ctx.Done():
 	}
 	logger.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return srv.Shutdown(shutdownCtx)
+	err = srv.Shutdown(shutdownCtx)
+	// Stop background work only after requests have drained, so their
+	// Reports are in the final flush.
+	stopRun()
+	<-ranDone
+	return cmp.Or(serveErr, err)
 }
 
 func setPassword(cfg config.Config, stdin io.Reader, stdout io.Writer) error {

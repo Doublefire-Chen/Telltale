@@ -7,8 +7,11 @@ import (
 	"io/fs"
 	"net/netip"
 	"os"
+	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/Doublefire-Chen/Telltale/internal/dashboard/store"
 )
 
 // DefaultPath is where the Dashboard looks for its config file when none is given.
@@ -26,6 +29,32 @@ type Config struct {
 	TrustedProxies []string `toml:"trusted_proxies"`
 	// GeoIPDB replaces the embedded GeoIP database with a MaxMind-format file.
 	GeoIPDB string `toml:"geoip_db"`
+	// HistoryRaw, HistoryMinute and HistoryQuarter are how long raw
+	// Reports, 1-minute averages and 15-minute averages are kept, e.g.
+	// "1h", "7d", "90d".
+	HistoryRaw     string `toml:"history_raw"`
+	HistoryMinute  string `toml:"history_minute"`
+	HistoryQuarter string `toml:"history_quarter"`
+}
+
+// Retention parses the history settings.
+func (c Config) Retention() (store.Retention, error) {
+	var r store.Retention
+	for _, f := range []struct {
+		name, value string
+		dst         *time.Duration
+	}{
+		{"history_raw", c.HistoryRaw, &r.Raw},
+		{"history_minute", c.HistoryMinute, &r.Minute},
+		{"history_quarter", c.HistoryQuarter, &r.Quarter},
+	} {
+		d, err := store.ParseRetention(f.value)
+		if err != nil {
+			return store.Retention{}, fmt.Errorf("%s: %w", f.name, err)
+		}
+		*f.dst = d
+	}
+	return r, nil
 }
 
 // Proxies parses TrustedProxies; plain addresses become single-address ranges.
@@ -51,6 +80,9 @@ func Default() Config {
 		Listen:         []string{"127.0.0.1:8080", "[::1]:8080"},
 		DataDir:        "/var/lib/telltale",
 		TrustedProxies: []string{"127.0.0.0/8", "::1"},
+		HistoryRaw:     "1h",
+		HistoryMinute:  "7d",
+		HistoryQuarter: "90d",
 	}
 }
 
@@ -79,6 +111,9 @@ func Load(path string, allowMissing bool) (Config, error) {
 		return Config{}, fmt.Errorf("config %s: data_dir must not be empty", path)
 	}
 	if _, err := cfg.Proxies(); err != nil {
+		return Config{}, fmt.Errorf("config %s: %w", path, err)
+	}
+	if _, err := cfg.Retention(); err != nil {
 		return Config{}, fmt.Errorf("config %s: %w", path, err)
 	}
 	return cfg, nil

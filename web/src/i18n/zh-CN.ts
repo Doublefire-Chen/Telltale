@@ -91,6 +91,11 @@ export const zhCN: Translation = {
     publicHint: '任何拿到链接的人都能看到主机、国旗和监控数据。IP 地址和已隐藏的主机永远不会公开。',
     saved: '已保存',
   },
+  detail: {
+    back: '全部主机',
+    range: '时间范围',
+    noData: '该时间范围内暂无历史数据。',
+  },
   footer: {
     geoip: 'IP 地理位置数据由 DB-IP 提供',
   },

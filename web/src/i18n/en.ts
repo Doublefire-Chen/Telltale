@@ -90,6 +90,11 @@ export const en = {
     publicHint: 'Anyone with the link can see Hosts, flags and metrics. IP addresses and Hidden Hosts are never shown publicly.',
     saved: 'Saved',
   },
+  detail: {
+    back: 'All Hosts',
+    range: 'Time range',
+    noData: 'No history for this range yet.',
+  },
   footer: {
     geoip: 'IP geolocation by DB-IP',
   },

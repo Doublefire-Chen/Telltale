@@ -7,6 +7,7 @@ export type FakeDashboardOptions = {
   loginError?: 'rate_limited'
   authenticated?: boolean
   statusPublic?: boolean
+  historyPoints?: number
   hosts?: Host[]
 }
 
@@ -40,6 +41,7 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
     password: opts.password ?? 'correct horse battery',
     authenticated: opts.authenticated ?? false,
     statusPublic: opts.statusPublic ?? false,
+    historyPoints: opts.historyPoints ?? 3,
     hosts: opts.hosts ?? [],
     requests: [] as { method: string; path: string; body: Record<string, unknown> }[],
   }
@@ -74,6 +76,23 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
       }
       if (path === '/api/status' && (state.authenticated || state.statusPublic)) {
         return json(200, { dashboard_version: 'v1.2.0', hosts: state.hosts })
+      }
+      const hist = path.match(/^\/api\/hosts\/([^/]+)\/history\?range=(\w+)$/)
+      if (hist && (state.authenticated || state.statusPublic)) {
+        state.requests.push({ method, path, body })
+        const n = state.historyPoints
+        const series = (v: number) => Array.from({ length: n }, () => v)
+        return json(200, {
+          range: hist[2],
+          t: Array.from({ length: n }, (_, i) => 1_790_000_000 + i * 60),
+          cpu: series(25),
+          memory: series(1024),
+          swap: series(0),
+          disk: series(2048),
+          rx_rate: series(10),
+          tx_rate: series(20),
+          load1: series(0.5),
+        })
       }
       if (!state.authenticated) return json(401, { error: 'unauthenticated' })
       if (path === '/api/settings' && method === 'GET') return json(200, { status_public: state.statusPublic })

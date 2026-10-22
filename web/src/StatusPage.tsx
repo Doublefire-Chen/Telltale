@@ -15,7 +15,9 @@ import {
 } from './api'
 import { Flags } from './Flag'
 import { formatBytes, formatLoad, formatPercent, formatRate, formatUsage, unknown, uptimeParts } from './format'
+import { HostDetail } from './HostDetail'
 import { HostSettings } from './HostSettings'
+import { hostHref, useRoute } from './route'
 import { TokenReveal } from './TokenReveal'
 
 const reconnectDelayMs = 2000
@@ -29,6 +31,7 @@ type StatusPageProps = {
 
 export function StatusPage({ admin, onUnauthorized }: StatusPageProps) {
   const { t } = useTranslation()
+  const [route, navigate] = useRoute()
   const [hosts, setHosts] = useState<Host[] | null>(null)
   const [dashboardVersion, setDashboardVersion] = useState('')
   const [failed, setFailed] = useState(false)
@@ -62,13 +65,25 @@ export function StatusPage({ admin, onUnauthorized }: StatusPageProps) {
 
   if (failed) return <p role="alert">{t('app.error')}</p>
   if (!hosts) return <p>{t('app.loading')}</p>
+  if (route.kind === 'host') {
+    const host = hosts.find((h) => h.id === route.id)
+    if (host) {
+      return <HostDetail host={host} name={displayName(host, t('status.unnamed'))} onBack={() => navigate('/')} />
+    }
+  }
   return (
     <section className="stack">
       <h1>{t('status.title')}</h1>
       {hosts.length === 0 ? (
         <p className="muted">{t('status.empty')}</p>
       ) : (
-        <HostTable hosts={hosts} dashboardVersion={dashboardVersion} onChanged={load} admin={admin} />
+        <HostTable
+          hosts={hosts}
+          dashboardVersion={dashboardVersion}
+          onChanged={load}
+          admin={admin}
+          onOpen={(id) => navigate(hostHref(id))}
+        />
       )}
       {admin && <AddHost onAdded={load} />}
       {admin && <DashboardSettings />}
@@ -107,7 +122,13 @@ function useLiveUpdates(load: () => Promise<void>, onMessage: (msg: LiveMessage)
   }, [load])
 }
 
-type HostTableProps = { hosts: Host[]; dashboardVersion: string; onChanged: () => Promise<void>; admin: boolean }
+type HostTableProps = {
+  hosts: Host[]
+  dashboardVersion: string
+  onChanged: () => Promise<void>
+  admin: boolean
+  onOpen: (id: string) => void
+}
 
 /**
  * byGroup orders Hosts for display: groups in the order their first Host
@@ -123,7 +144,7 @@ function byGroup(hosts: Host[]): { group: string; hosts: Host[] }[] {
   return groups
 }
 
-function HostTable({ hosts, dashboardVersion, onChanged, admin }: HostTableProps) {
+function HostTable({ hosts, dashboardVersion, onChanged, admin, onOpen }: HostTableProps) {
   const { t } = useTranslation()
   const [openSettings, setOpenSettings] = useState<string | null>(null)
   const now = Date.now()
@@ -185,6 +206,7 @@ function HostTable({ hosts, dashboardVersion, onChanged, admin }: HostTableProps
                     dashboardVersion={dashboardVersion}
                     now={now}
                     admin={admin}
+                    onOpen={() => onOpen(h.id)}
                     open={openSettings === h.id}
                     onToggle={() => setOpenSettings(openSettings === h.id ? null : h.id)}
                   />
@@ -215,6 +237,7 @@ type HostRowProps = {
   dashboardVersion: string
   now: number
   admin: boolean
+  onOpen: () => void
   open: boolean
   onToggle: () => void
 }
@@ -227,7 +250,7 @@ function displayName(h: Host, unnamed: string): string {
   return h.name || h.host_info?.hostname || unnamed
 }
 
-function HostRow({ host: h, dashboardVersion, now, admin, open, onToggle }: HostRowProps) {
+function HostRow({ host: h, dashboardVersion, now, admin, onOpen, open, onToggle }: HostRowProps) {
   const { t, i18n } = useTranslation()
   const lang = i18n.resolvedLanguage ?? 'en'
   const r = h.report
@@ -240,7 +263,17 @@ function HostRow({ host: h, dashboardVersion, now, admin, open, onToggle }: Host
         <th scope="row">
           <span className={`dot ${state}`} role="img" aria-label={t(`status.${state}`)} title={t(`status.${state}`)} />
           <Flags countries={h.countries} />
-          <span className="host-name">{name}</span>
+          <a
+            className="host-name"
+            href={hostHref(h.id)}
+            onClick={(e) => {
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+              e.preventDefault()
+              onOpen()
+            }}
+          >
+            {name}
+          </a>
           {h.hidden && <span className="tag">{t('status.hiddenTag')}</span>}
           {h.agent_outdated && (
             <span

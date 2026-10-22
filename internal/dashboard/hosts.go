@@ -295,6 +295,7 @@ func (s *Server) handleDeleteHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.latest.delete(id)
+	s.forget(id)
 	s.markOnline(id)
 	s.hostsChanged()
 	w.WriteHeader(http.StatusNoContent)

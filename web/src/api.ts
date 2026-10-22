@@ -179,3 +179,22 @@ export async function getSettings(): Promise<Settings> {
 export async function saveSettings(settings: Settings): Promise<void> {
   await request('PUT', '/api/settings', settings)
 }
+
+export type HistoryRange = '1h' | '24h' | '7d' | '30d'
+
+/** History is a Host's charted metrics, column by column; times are Unix seconds. */
+export type History = {
+  range: HistoryRange
+  t: number[]
+  cpu: (number | null)[]
+  memory: (number | null)[]
+  swap: (number | null)[]
+  disk: (number | null)[]
+  rx_rate: (number | null)[]
+  tx_rate: (number | null)[]
+  load1: (number | null)[]
+}
+
+export async function getHistory(id: string, range: HistoryRange): Promise<History> {
+  return (await request('GET', `${hostPath(id)}/history?range=${range}`)).json()
+}

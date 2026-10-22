@@ -14,7 +14,8 @@
     "i18next-browser-languagedetector": "8.2.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "react-i18next": "17.1.2"
+    "react-i18next": "17.1.2",
+    "uplot": "1.6.32"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.2",

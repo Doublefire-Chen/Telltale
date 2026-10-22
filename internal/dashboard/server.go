@@ -4,6 +4,7 @@
 package dashboard
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -63,6 +64,15 @@ type Options struct {
 	// SweepInterval is how often Run looks for Hosts that went Offline;
 	// defaults to one second.
 	SweepInterval time.Duration
+	// FlushInterval is how often Run writes buffered Reports to the
+	// database; defaults to 10 seconds.
+	FlushInterval time.Duration
+	// DownsampleInterval is how often Run downsamples history and applies
+	// retention; defaults to one minute.
+	DownsampleInterval time.Duration
+	// Retention is how long each history tier is kept; zero fields take
+	// DefaultRetention's.
+	Retention store.Retention
 }
 
 // Server is the Dashboard's HTTP handler.
@@ -84,6 +94,10 @@ type Server struct {
 	// hidden caches the IDs of Hidden Hosts (nil: reload); guarded by hiddenMu.
 	hiddenMu sync.Mutex
 	hidden   map[string]bool
+
+	rec                         recorder
+	retention                   store.Retention
+	flushEvery, downsampleEvery time.Duration
 
 	sweepEvery time.Duration
 	// offline holds the Hosts last announced as Offline; guarded by offlineMu.
@@ -107,6 +121,13 @@ func New(opts Options) *Server {
 	if s.sweepEvery <= 0 {
 		s.sweepEvery = time.Second
 	}
+	s.flushEvery = cmp.Or(opts.FlushInterval, defaultFlushInterval)
+	s.downsampleEvery = cmp.Or(opts.DownsampleInterval, defaultDownsampleInterval)
+	s.retention = store.Retention{
+		Raw:     cmp.Or(opts.Retention.Raw, DefaultRetention.Raw),
+		Minute:  cmp.Or(opts.Retention.Minute, DefaultRetention.Minute),
+		Quarter: cmp.Or(opts.Retention.Quarter, DefaultRetention.Quarter),
+	}
 	if s.now == nil {
 		s.now = time.Now
 	}
@@ -128,6 +149,7 @@ func New(opts Options) *Server {
 	s.mux.Handle("DELETE /api/session", s.requireSetup(http.HandlerFunc(s.handleLogout)))
 	s.mux.Handle("GET /api/status", s.requireSetup(s.requireViewer(http.HandlerFunc(s.handleStatus))))
 	s.mux.Handle("GET /api/live", s.requireSetup(s.requireViewer(http.HandlerFunc(s.handleLive))))
+	s.mux.Handle("GET /api/hosts/{id}/history", s.requireSetup(s.requireViewer(http.HandlerFunc(s.handleHistory))))
 	s.mux.Handle("GET /api/settings", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleGetSettings))))
 	s.mux.Handle("PUT /api/settings", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleSetSettings))))
 	s.mux.Handle("POST /api/hosts", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleAddHost))))
@@ -141,20 +163,34 @@ func New(opts Options) *Server {
 		writeError(w, http.StatusNotFound, "not_found")
 	})
 	s.mux.HandleFunc("/", s.handleApp)
+	s.restoreLatest(context.Background())
 	return s
 }
 
 // Run does the Dashboard's background work until ctx ends: it announces
-// Hosts that go Offline to the Status page.
+// Hosts that go Offline, writes buffered Reports to the database, and
+// downsamples history. Buffered Reports are written once more on the way out.
 func (s *Server) Run(ctx context.Context) {
-	ticker := time.NewTicker(s.sweepEvery)
-	defer ticker.Stop()
+	sweep := time.NewTicker(s.sweepEvery)
+	defer sweep.Stop()
+	flush := time.NewTicker(s.flushEvery)
+	defer flush.Stop()
+	downsample := time.NewTicker(s.downsampleEvery)
+	defer downsample.Stop()
+	// Database work is never cancelled half-way: a cancelled flush would
+	// lose the batch it had already taken from the buffer.
+	db := context.WithoutCancel(ctx)
 	for {
 		select {
 		case <-ctx.Done():
+			s.flush(db)
 			return
-		case <-ticker.C:
+		case <-sweep.C:
 			s.sweepOffline()
+		case <-flush.C:
+			s.flush(db)
+		case <-downsample.C:
+			s.downsample(db)
 		}
 	}
 }

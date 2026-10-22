@@ -379,3 +379,64 @@ button.danger-text {
   color: var(--muted);
   font-size: 0.75rem;
 }
+
+a.host-name {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.host-name:hover {
+  text-decoration: underline;
+}
+
+button.link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+}
+
+.segmented {
+  display: inline-flex;
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.segmented button {
+  border: none;
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  gap: 16px;
+}
+
+.chart {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.chart figcaption {
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.chart .u-legend {
+  font-size: 0.8rem;
+  color: var(--muted);
+}

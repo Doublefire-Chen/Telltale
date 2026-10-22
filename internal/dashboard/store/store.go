@@ -49,6 +49,28 @@ var migrations = []string{
 	ALTER TABLE hosts ADD COLUMN group_name TEXT NOT NULL DEFAULT '';
 	ALTER TABLE hosts ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 	UPDATE hosts SET sort_order = rowid;`,
+	`ALTER TABLE hosts ADD COLUMN latest_report TEXT;
+	CREATE TABLE metrics_raw (
+		host_id TEXT NOT NULL,
+		t       INTEGER NOT NULL,
+		cpu REAL, memory REAL, swap REAL, disk REAL, rx_rate REAL, tx_rate REAL, load1 REAL
+	);
+	CREATE INDEX metrics_raw_host_t ON metrics_raw (host_id, t);
+	CREATE INDEX metrics_raw_t ON metrics_raw (t);
+	CREATE TABLE metrics_1m (
+		host_id TEXT NOT NULL,
+		t       INTEGER NOT NULL,
+		cpu REAL, memory REAL, swap REAL, disk REAL, rx_rate REAL, tx_rate REAL, load1 REAL,
+		PRIMARY KEY (host_id, t)
+	) WITHOUT ROWID;
+	CREATE INDEX metrics_1m_t ON metrics_1m (t);
+	CREATE TABLE metrics_15m (
+		host_id TEXT NOT NULL,
+		t       INTEGER NOT NULL,
+		cpu REAL, memory REAL, swap REAL, disk REAL, rx_rate REAL, tx_rate REAL, load1 REAL,
+		PRIMARY KEY (host_id, t)
+	) WITHOUT ROWID;
+	CREATE INDEX metrics_15m_t ON metrics_15m (t);`,
 }
 
 // ErrInvalidOrder is returned by SetHostOrder when the IDs are not exactly the existing Hosts.
@@ -336,7 +358,7 @@ func (s *Store) UpdateHost(ctx context.Context, hostID string, u HostUpdate) (bo
 		}
 	}
 	if len(sets) == 0 {
-		return s.hostExists(ctx, hostID)
+		return s.HostExists(ctx, hostID)
 	}
 	res, err := s.db.ExecContext(ctx, `UPDATE hosts SET `+strings.Join(sets, ", ")+` WHERE id = ?`, append(args, hostID)...)
 	return affected(res, err)
@@ -349,7 +371,8 @@ func deref(p *string) string {
 	return *p
 }
 
-func (s *Store) hostExists(ctx context.Context, hostID string) (bool, error) {
+// HostExists reports whether a Host with this ID exists.
+func (s *Store) HostExists(ctx context.Context, hostID string) (bool, error) {
 	var one int
 	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM hosts WHERE id = ?`, hostID).Scan(&one)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -394,9 +417,24 @@ func (s *Store) SetHostToken(ctx context.Context, hostID string, tokenHash []byt
 	return affected(s.db.ExecContext(ctx, `UPDATE hosts SET token_hash = ? WHERE id = ?`, tokenHash, hostID))
 }
 
-// DeleteHost removes a Host and everything stored about it. It reports whether the Host existed.
+// DeleteHost removes a Host and everything stored about it, history
+// included. It reports whether the Host existed.
 func (s *Store) DeleteHost(ctx context.Context, hostID string) (bool, error) {
-	return affected(s.db.ExecContext(ctx, `DELETE FROM hosts WHERE id = ?`, hostID))
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	for _, table := range historyTables {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE host_id = ?`, hostID); err != nil {
+			return false, err
+		}
+	}
+	found, err := affected(tx.ExecContext(ctx, `DELETE FROM hosts WHERE id = ?`, hostID))
+	if err != nil {
+		return false, err
+	}
+	return found, tx.Commit()
 }
 
 func affected(res sql.Result, err error) (bool, error) {
