@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Host, HostInfo, Report } from './api'
@@ -46,6 +46,8 @@ function host(h: Partial<Host> & Pick<Host, 'id'>): Host {
     agent_outdated: false,
     countries: [],
     country_override: '',
+    group: '',
+    hidden: false,
     ...h,
   }
 }
@@ -182,13 +184,95 @@ describe('Status page', () => {
     await user.type(input, 'jp')
     expect((input as HTMLInputElement).value).toBe('JP')
     await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(dash.countryRequests).toEqual([{ id: 'h1', country: 'JP' }])
+    expect(dash.requests.at(-1)?.body).toMatchObject({ country_override: 'JP' })
     expect(await within(row('anycast')).findByRole('img', { name: 'JP' })).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Settings for anycast' }))
     await user.clear(screen.getByLabelText(/Country override/))
     await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(dash.countryRequests.at(-1)).toEqual({ id: 'h1', country: '' })
+    expect(dash.requests.at(-1)?.body).toMatchObject({ country_override: '' })
+  })
+
+  it('renames, groups and hides a Host', async () => {
+    vi.useRealTimers()
+    const user = userEvent.setup()
+    const dash = stubDashboard({
+      authenticated: true,
+      hosts: [host({ id: 'h1', name: 'web-1' }), host({ id: 'h2', name: 'db-1' })],
+    })
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Settings for web-1' }))
+    const settings = within(screen.getByRole('button', { name: 'Save' }).closest('form')!)
+    const name = settings.getByLabelText(/^Display name/)
+    await user.clear(name)
+    await user.type(name, 'Tokyo')
+    await user.type(settings.getByLabelText(/^Group/), 'Asia')
+    await user.click(settings.getByLabelText('Hide from the public Status page'))
+    await user.click(settings.getByRole('button', { name: 'Save' }))
+
+    expect(dash.requests.at(-1)).toMatchObject({
+      method: 'PATCH',
+      path: '/api/hosts/h1',
+      body: { name: 'Tokyo', group: 'Asia', hidden: true },
+    })
+    expect(await screen.findByRole('columnheader', { name: 'Asia' })).toBeTruthy()
+    expect(within(row('Tokyo')).getByText('Hidden')).toBeTruthy()
+  })
+
+  it('reorders Hosts in the order they are shown', async () => {
+    vi.useRealTimers()
+    const user = userEvent.setup()
+    const dash = stubDashboard({
+      authenticated: true,
+      hosts: [host({ id: 'a', name: 'alpha' }), host({ id: 'b', name: 'bravo' }), host({ id: 'c', name: 'charlie' })],
+    })
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Settings for charlie' }))
+    expect((screen.getByRole('button', { name: 'Move down' }) as HTMLButtonElement).disabled).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Move up' }))
+    expect(dash.requests.at(-1)).toMatchObject({ method: 'PUT', body: { ids: ['a', 'c', 'b'] } })
+
+    await screen.findByRole('rowheader', { name: /charlie/ })
+    const order = screen.getAllByRole('rowheader').map((r) => r.textContent?.replace(/^—/, ''))
+    expect(order).toEqual(['alpha', 'charlie', 'bravo'])
+  })
+
+  it('regenerates a token and shows the new one once', async () => {
+    vi.useRealTimers()
+    const user = userEvent.setup()
+    const dash = stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'web-1' })] })
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Settings for web-1' }))
+    await user.click(screen.getByRole('button', { name: 'Regenerate token' }))
+    expect(dash.requests.at(-1)).toMatchObject({ method: 'POST', path: '/api/hosts/h1/token' })
+    expect(await screen.findByRole('heading', { name: 'New token for web-1' })).toBeTruthy()
+    expect(screen.getByText(/token = "tt_N+"/)).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+    expect(screen.queryByText(/tt_N+/)).toBeNull()
+  })
+
+  it('deletes a Host only after confirming', async () => {
+    vi.useRealTimers()
+    const user = userEvent.setup()
+    const dash = stubDashboard({
+      authenticated: true,
+      hosts: [host({ id: 'h1', name: 'old-box' }), host({ id: 'h2', name: 'keeper' })],
+    })
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Settings for old-box' }))
+    await user.click(screen.getByRole('button', { name: 'Delete Host' }))
+    expect(dash.requests.some((r) => r.method === 'DELETE')).toBe(false)
+    expect(screen.getByRole('alertdialog').textContent).toContain('Delete old-box and everything stored about it?')
+    await user.click(screen.getByRole('button', { name: 'Delete permanently' }))
+
+    expect(dash.requests.at(-1)).toMatchObject({ method: 'DELETE', path: '/api/hosts/h1' })
+    await waitFor(() => expect(screen.queryByRole('rowheader', { name: /old-box/ })).toBeNull())
+    expect(screen.getByRole('rowheader', { name: /keeper/ })).toBeTruthy()
   })
 
   it('updates live from the WebSocket without reloading', async () => {

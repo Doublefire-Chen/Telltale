@@ -125,7 +125,10 @@ func New(opts Options) *Server {
 	s.mux.Handle("GET /api/status", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleStatus))))
 	s.mux.Handle("GET /api/live", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleLive))))
 	s.mux.Handle("POST /api/hosts", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleAddHost))))
-	s.mux.Handle("PUT /api/hosts/{id}/country", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleSetCountry))))
+	s.mux.Handle("PATCH /api/hosts/{id}", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleUpdateHost))))
+	s.mux.Handle("DELETE /api/hosts/{id}", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleDeleteHost))))
+	s.mux.Handle("POST /api/hosts/{id}/token", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleRegenerateToken))))
+	s.mux.Handle("PUT /api/hosts/order", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleSetOrder))))
 	s.mux.HandleFunc("POST "+v1.ReportPath, s.handleReport)
 	s.mux.HandleFunc("POST "+v1.HostInfoPath, s.handleHostInfo)
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {

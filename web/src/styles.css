@@ -302,3 +302,86 @@ button.icon {
 tr.offline td {
   opacity: 0.55;
 }
+
+.settings {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.settings-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: flex-start;
+}
+
+.settings-fields input {
+  width: 14em;
+}
+
+.settings-fields input.short {
+  width: 6em;
+}
+
+label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+}
+
+label.checkbox input {
+  width: auto;
+}
+
+.row .spacer {
+  flex: 1;
+}
+
+.row {
+  flex-wrap: wrap;
+}
+
+.danger-zone {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.danger-zone > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 32em;
+}
+
+button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+button.danger-text {
+  color: var(--danger);
+}
+
+.group-row th {
+  padding-top: 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg);
+}
+
+.tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.75rem;
+}

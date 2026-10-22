@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { type FormEvent, Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   type AddedHost,
@@ -9,10 +9,12 @@ import {
   type HostInfo,
   type LiveMessage,
   liveURL,
-  setCountryOverride,
+  setHostOrder,
 } from './api'
 import { Flags } from './Flag'
 import { formatBytes, formatLoad, formatPercent, formatRate, formatUsage, unknown, uptimeParts } from './format'
+import { HostSettings } from './HostSettings'
+import { TokenReveal } from './TokenReveal'
 
 const reconnectDelayMs = 2000
 
@@ -93,10 +95,38 @@ function useLiveUpdates(load: () => Promise<void>, onMessage: (msg: LiveMessage)
 
 type HostTableProps = { hosts: Host[]; dashboardVersion: string; onChanged: () => Promise<void> }
 
+/**
+ * byGroup orders Hosts for display: groups in the order their first Host
+ * appears, each Host keeping the admin's order within its group.
+ */
+function byGroup(hosts: Host[]): { group: string; hosts: Host[] }[] {
+  const groups: { group: string; hosts: Host[] }[] = []
+  for (const h of hosts) {
+    let g = groups.find((x) => x.group === h.group)
+    if (!g) groups.push((g = { group: h.group, hosts: [] }))
+    g.hosts.push(h)
+  }
+  return groups
+}
+
 function HostTable({ hosts, dashboardVersion, onChanged }: HostTableProps) {
   const { t } = useTranslation()
   const [openSettings, setOpenSettings] = useState<string | null>(null)
   const now = Date.now()
+  const groups = byGroup(hosts)
+  // Moving swaps a Host with its neighbour as displayed, then saves that order.
+  const displayed = groups.flatMap((g) => g.hosts)
+
+  async function move(id: string, direction: -1 | 1) {
+    const ids = displayed.map((h) => h.id)
+    const i = ids.indexOf(id)
+    const j = i + direction
+    if (i < 0 || j < 0 || j >= ids.length) return
+    ;[ids[i], ids[j]] = [ids[j], ids[i]]
+    await setHostOrder(ids)
+    await onChanged()
+  }
+
   return (
     <div className="table-scroll">
       <table className="hosts">
@@ -119,16 +149,33 @@ function HostTable({ hosts, dashboardVersion, onChanged }: HostTableProps) {
           </tr>
         </thead>
         <tbody>
-          {hosts.map((h) => (
-            <HostRow
-              key={h.id}
-              host={h}
-              dashboardVersion={dashboardVersion}
-              now={now}
-              open={openSettings === h.id}
-              onToggle={() => setOpenSettings(openSettings === h.id ? null : h.id)}
-              onChanged={onChanged}
-            />
+          {groups.map((g) => (
+            <Fragment key={g.group}>
+              {g.group && (
+                <tr className="group-row">
+                  <th scope="colgroup" colSpan={columnCount}>
+                    {g.group}
+                  </th>
+                </tr>
+              )}
+              {g.hosts.map((h) => {
+                const index = displayed.indexOf(h)
+                return (
+                  <HostRow
+                    key={h.id}
+                    host={h}
+                    dashboardVersion={dashboardVersion}
+                    now={now}
+                    open={openSettings === h.id}
+                    onToggle={() => setOpenSettings(openSettings === h.id ? null : h.id)}
+                    onChanged={onChanged}
+                    canMoveUp={index > 0}
+                    canMoveDown={index < displayed.length - 1}
+                    onMove={(direction) => move(h.id, direction)}
+                  />
+                )
+              })}
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -143,11 +190,15 @@ type HostRowProps = {
   open: boolean
   onToggle: () => void
   onChanged: () => Promise<void>
+  canMoveUp: boolean
+  canMoveDown: boolean
+  onMove: (direction: -1 | 1) => Promise<void>
 }
 
 const columnCount = 13
 
-function HostRow({ host: h, dashboardVersion, now, open, onToggle, onChanged }: HostRowProps) {
+function HostRow(props: HostRowProps) {
+  const { host: h, dashboardVersion, now, open, onToggle, onChanged } = props
   const { t, i18n } = useTranslation()
   const lang = i18n.resolvedLanguage ?? 'en'
   const r = h.report
@@ -161,6 +212,7 @@ function HostRow({ host: h, dashboardVersion, now, open, onToggle, onChanged }: 
           <span className={`dot ${state}`} role="img" aria-label={t(`status.${state}`)} title={t(`status.${state}`)} />
           <Flags countries={h.countries} />
           <span className="host-name">{name}</span>
+          {h.hidden && <span className="tag">{t('status.hiddenTag')}</span>}
           {h.agent_outdated && (
             <span
               className="badge"
@@ -206,66 +258,19 @@ function HostRow({ host: h, dashboardVersion, now, open, onToggle, onChanged }: 
       {open && (
         <tr className="settings-row">
           <td colSpan={columnCount}>
-            <HostSettings host={h} onClose={onToggle} onSaved={onChanged} />
+            <HostSettings
+              host={h}
+              displayName={name}
+              canMoveUp={props.canMoveUp}
+              canMoveDown={props.canMoveDown}
+              onMove={props.onMove}
+              onClose={onToggle}
+              onChanged={onChanged}
+            />
           </td>
         </tr>
       )}
     </>
-  )
-}
-
-/** HostSettings edits what the Dashboard stores about a Host; nothing is sent to its Agent. */
-type HostSettingsProps = { host: Host; onClose: () => void; onSaved: () => Promise<void> }
-
-function HostSettings({ host, onClose, onSaved }: HostSettingsProps) {
-  const { t } = useTranslation()
-  const [country, setCountry] = useState(host.country_override)
-  const [error, setError] = useState<'invalid_country' | 'error' | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  async function submit(e: FormEvent) {
-    e.preventDefault()
-    setBusy(true)
-    setError(null)
-    try {
-      await setCountryOverride(host.id, country.trim())
-      onClose()
-      await onSaved()
-    } catch (err) {
-      setError(err instanceof ApiError && err.code === 'invalid_country' ? 'invalid_country' : 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <form className="settings" onSubmit={(e) => void submit(e)}>
-      <label>
-        {t('hostSettings.country')}
-        <input
-          name="country"
-          value={country}
-          maxLength={2}
-          placeholder="GeoIP"
-          autoCapitalize="characters"
-          onChange={(e) => setCountry(e.target.value.toUpperCase())}
-        />
-        <span className="muted hint">{t('hostSettings.countryHint')}</span>
-      </label>
-      {error && (
-        <p role="alert" className="error">
-          {error === 'invalid_country' ? t('hostSettings.invalidCountry') : t('app.error')}
-        </p>
-      )}
-      <div className="row">
-        <button type="button" className="secondary" onClick={onClose}>
-          {t('hostSettings.close')}
-        </button>
-        <button type="submit" disabled={busy}>
-          {t('hostSettings.save')}
-        </button>
-      </div>
-    </form>
   )
 }
 
@@ -327,7 +332,15 @@ function AddHost({ onAdded }: { onAdded: () => Promise<void> }) {
     }
   }
 
-  if (added) return <HostAdded host={added} onDone={() => setAdded(null)} />
+  if (added) {
+    return (
+      <TokenReveal
+        title={t('addHost.addedTitle', { name: added.name || t('status.unnamed') })}
+        token={added.token}
+        onDone={() => setAdded(null)}
+      />
+    )
+  }
   return (
     <form className="card" onSubmit={(e) => void submit(e)}>
       <h2>{t('addHost.title')}</h2>
@@ -345,34 +358,5 @@ function AddHost({ onAdded }: { onAdded: () => Promise<void> }) {
         {t('addHost.submit')}
       </button>
     </form>
-  )
-}
-
-/** HostAdded shows the new Host's token once, as a ready-to-save Agent config. */
-function HostAdded({ host, onDone }: { host: AddedHost; onDone: () => void }) {
-  const { t } = useTranslation()
-  const [copied, setCopied] = useState(false)
-  const config = `dashboard_url = "${location.origin}"\ntoken = "${host.token}"\n`
-
-  return (
-    <section className="card" aria-live="polite">
-      <h2>{t('addHost.addedTitle', { name: host.name || t('status.unnamed') })}</h2>
-      <p>{t('addHost.addedBody')}</p>
-      <pre>
-        <code>{config}</code>
-      </pre>
-      <div className="row">
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => void navigator.clipboard?.writeText(config).then(() => setCopied(true))}
-        >
-          {copied ? t('addHost.copied') : t('addHost.copy')}
-        </button>
-        <button type="button" onClick={onDone}>
-          {t('addHost.done')}
-        </button>
-      </div>
-    </section>
   )
 }

@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -41,7 +42,14 @@ var migrations = []string{
 	ALTER TABLE hosts ADD COLUMN ipv6 TEXT NOT NULL DEFAULT '';
 	ALTER TABLE hosts ADD COLUMN ipv6_seen_at INTEGER NOT NULL DEFAULT 0;
 	ALTER TABLE hosts ADD COLUMN country_override TEXT NOT NULL DEFAULT '';`,
+	`ALTER TABLE hosts ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE hosts ADD COLUMN group_name TEXT NOT NULL DEFAULT '';
+	ALTER TABLE hosts ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+	UPDATE hosts SET sort_order = rowid;`,
 }
+
+// ErrInvalidOrder is returned by SetHostOrder when the IDs are not exactly the existing Hosts.
+var ErrInvalidOrder = errors.New("order must list every Host exactly once")
 
 // Store is the Dashboard's persistent state.
 type Store struct {
@@ -173,23 +181,29 @@ type Host struct {
 	IPv4SeenAt, IPv6SeenAt time.Time
 	// CountryOverride is the admin's manual ISO country code, or "".
 	CountryOverride string
+	// Group is the group the Host is shown under, or "" for none.
+	Group string
+	// Hidden Hosts are left off the public Status page.
+	Hidden bool
 }
 
 // CreateHost registers a Host with the hash of its token.
 func (s *Store) CreateHost(ctx context.Context, h Host, tokenHash []byte) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO hosts (id, name, token_hash, created_at) VALUES (?, ?, ?, ?)`,
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO hosts (id, name, token_hash, created_at, sort_order)
+		 VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM hosts))`,
 		h.ID, h.Name, tokenHash, h.CreatedAt.Unix())
 	return err
 }
 
-const hostColumns = `id, name, created_at, host_info, ipv4, ipv4_seen_at, ipv6, ipv6_seen_at, country_override`
+const hostColumns = `id, name, created_at, host_info, ipv4, ipv4_seen_at, ipv6, ipv6_seen_at, country_override, group_name, hidden`
 
 func scanHost(scan func(...any) error) (Host, error) {
 	var h Host
 	var created, v4Seen, v6Seen int64
 	var info sql.NullString
 	var v4, v6 string
-	if err := scan(&h.ID, &h.Name, &created, &info, &v4, &v4Seen, &v6, &v6Seen, &h.CountryOverride); err != nil {
+	if err := scan(&h.ID, &h.Name, &created, &info, &v4, &v4Seen, &v6, &v6Seen, &h.CountryOverride, &h.Group, &h.Hidden); err != nil {
 		return Host{}, err
 	}
 	h.CreatedAt = time.Unix(created, 0)
@@ -202,9 +216,9 @@ func scanHost(scan func(...any) error) (Host, error) {
 	return h, nil
 }
 
-// Hosts returns all Hosts in the order they were added.
+// Hosts returns all Hosts in the admin's order.
 func (s *Store) Hosts(ctx context.Context) ([]Host, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+hostColumns+` FROM hosts ORDER BY created_at, id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+hostColumns+` FROM hosts ORDER BY sort_order, created_at, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -251,10 +265,96 @@ func (s *Store) SetHostInfo(ctx context.Context, hostID string, info []byte, fro
 	}
 }
 
-// SetCountryOverride sets (or, with "", clears) a Host's manual country.
-// It reports whether the Host exists.
-func (s *Store) SetCountryOverride(ctx context.Context, hostID, country string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `UPDATE hosts SET country_override = ? WHERE id = ?`, country, hostID)
+// HostUpdate changes some of a Host's Dashboard-side settings; nil fields stay as they are.
+type HostUpdate struct {
+	Name, Group, CountryOverride *string
+	Hidden                       *bool
+}
+
+// UpdateHost applies u to a Host. It reports whether the Host exists.
+func (s *Store) UpdateHost(ctx context.Context, hostID string, u HostUpdate) (bool, error) {
+	var sets []string
+	var args []any
+	for _, f := range []struct {
+		column string
+		value  any
+		set    bool
+	}{
+		{"name", deref(u.Name), u.Name != nil},
+		{"group_name", deref(u.Group), u.Group != nil},
+		{"country_override", deref(u.CountryOverride), u.CountryOverride != nil},
+		{"hidden", u.Hidden != nil && *u.Hidden, u.Hidden != nil},
+	} {
+		if f.set {
+			sets = append(sets, f.column+" = ?")
+			args = append(args, f.value)
+		}
+	}
+	if len(sets) == 0 {
+		return s.hostExists(ctx, hostID)
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE hosts SET `+strings.Join(sets, ", ")+` WHERE id = ?`, append(args, hostID)...)
+	return affected(res, err)
+}
+
+func deref(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+func (s *Store) hostExists(ctx context.Context, hostID string) (bool, error) {
+	var one int
+	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM hosts WHERE id = ?`, hostID).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// SetHostOrder sets the display order; ids must list every Host exactly once.
+func (s *Store) SetHostOrder(ctx context.Context, ids []string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var count int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM hosts`).Scan(&count); err != nil {
+		return err
+	}
+	seen := make(map[string]bool, len(ids))
+	if len(ids) != count {
+		return ErrInvalidOrder
+	}
+	for i, id := range ids {
+		if seen[id] {
+			return ErrInvalidOrder
+		}
+		seen[id] = true
+		res, err := tx.ExecContext(ctx, `UPDATE hosts SET sort_order = ? WHERE id = ?`, i+1, id)
+		if ok, err := affected(res, err); err != nil {
+			return err
+		} else if !ok {
+			return ErrInvalidOrder
+		}
+	}
+	return tx.Commit()
+}
+
+// SetHostToken replaces a Host's token hash, so the old token stops working
+// at once. It reports whether the Host exists.
+func (s *Store) SetHostToken(ctx context.Context, hostID string, tokenHash []byte) (bool, error) {
+	return affected(s.db.ExecContext(ctx, `UPDATE hosts SET token_hash = ? WHERE id = ?`, tokenHash, hostID))
+}
+
+// DeleteHost removes a Host and everything stored about it. It reports whether the Host existed.
+func (s *Store) DeleteHost(ctx context.Context, hostID string) (bool, error) {
+	return affected(s.db.ExecContext(ctx, `DELETE FROM hosts WHERE id = ?`, hostID))
+}
+
+func affected(res sql.Result, err error) (bool, error) {
 	if err != nil {
 		return false, err
 	}

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/netip"
 	"slices"
@@ -19,7 +20,10 @@ import (
 // HostTokenPrefix starts every Host token, so leaked tokens are easy to recognise.
 const HostTokenPrefix = "tt_"
 
-const maxHostNameLen = 64
+const (
+	maxHostNameLen  = 64
+	maxGroupNameLen = 32
+)
 
 type hostView struct {
 	ID string `json:"id"`
@@ -40,6 +44,10 @@ type hostView struct {
 	IPv6 string `json:"ipv6,omitempty"`
 	// CountryOverride is the admin's manual country, or "".
 	CountryOverride string `json:"country_override"`
+	// Group is the group the Host is shown under, or "".
+	Group string `json:"group"`
+	// Hidden Hosts are left off the public Status page.
+	Hidden bool `json:"hidden"`
 }
 
 // addressMaxAge is how long an address stays shown without being seen again.
@@ -62,7 +70,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := statusResponse{DashboardVersion: s.version, Hosts: make([]hostView, 0, len(hosts))}
 	for _, h := range hosts {
-		v := hostView{ID: h.ID, Name: h.Name}
+		v := hostView{ID: h.ID, Name: h.Name, Group: h.Group, Hidden: h.Hidden}
 		if h.HostInfo != nil {
 			var info v1.HostInfo
 			if err := json.Unmarshal(h.HostInfo, &info); err == nil {
@@ -109,12 +117,11 @@ func (s *Server) handleAddHost(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, err)
 		return
 	}
-	secret, err := newToken()
+	token, err := newHostToken()
 	if err != nil {
 		s.internalError(w, err)
 		return
 	}
-	token := HostTokenPrefix + secret
 	host := store.Host{ID: id, Name: name, CreatedAt: s.now()}
 	if err := s.store.CreateHost(r.Context(), host, hashToken(token)); err != nil {
 		s.internalError(w, err)
@@ -122,6 +129,14 @@ func (s *Server) handleAddHost(w http.ResponseWriter, r *http.Request) {
 	}
 	s.hub.publish(liveMessage{Type: "hosts_changed"})
 	writeJSON(w, http.StatusCreated, addHostResponse{ID: id, Name: name, Token: token})
+}
+
+func newHostToken() (string, error) {
+	secret, err := newToken()
+	if err != nil {
+		return "", err
+	}
+	return HostTokenPrefix + secret, nil
 }
 
 func newHostID() (string, error) {
@@ -157,22 +172,46 @@ func (s *Server) addAddresses(v *hostView, h store.Host) {
 	}
 }
 
-type setCountryRequest struct {
-	Country string `json:"country"`
+type updateHostRequest struct {
+	Name            *string `json:"name"`
+	Group           *string `json:"group"`
+	Hidden          *bool   `json:"hidden"`
+	CountryOverride *string `json:"country_override"`
 }
 
-// handleSetCountry sets or clears a Host's manual country override.
-func (s *Server) handleSetCountry(w http.ResponseWriter, r *http.Request) {
-	var req setCountryRequest
+// handleUpdateHost changes a Host's Dashboard-side settings: display name,
+// group, Hidden flag and country override. Nothing is sent to its Agent.
+func (s *Server) handleUpdateHost(w http.ResponseWriter, r *http.Request) {
+	var req updateHostRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	country := strings.ToUpper(strings.TrimSpace(req.Country))
-	if country != "" && !isCountryCode(country) {
-		writeError(w, http.StatusBadRequest, "invalid_country")
-		return
+	u := store.HostUpdate{Hidden: req.Hidden}
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if utf8.RuneCountInString(name) > maxHostNameLen {
+			writeError(w, http.StatusBadRequest, "invalid_name")
+			return
+		}
+		u.Name = &name
 	}
-	found, err := s.store.SetCountryOverride(r.Context(), r.PathValue("id"), country)
+	if req.Group != nil {
+		group := strings.TrimSpace(*req.Group)
+		if utf8.RuneCountInString(group) > maxGroupNameLen {
+			writeError(w, http.StatusBadRequest, "invalid_group")
+			return
+		}
+		u.Group = &group
+	}
+	if req.CountryOverride != nil {
+		country := strings.ToUpper(strings.TrimSpace(*req.CountryOverride))
+		if country != "" && !isCountryCode(country) {
+			writeError(w, http.StatusBadRequest, "invalid_country")
+			return
+		}
+		u.CountryOverride = &country
+	}
+	found, err := s.store.UpdateHost(r.Context(), r.PathValue("id"), u)
 	if err != nil {
 		s.internalError(w, err)
 		return
@@ -181,6 +220,69 @@ func (s *Server) handleSetCountry(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 		return
 	}
+	s.hub.publish(liveMessage{Type: "hosts_changed"})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type hostOrderRequest struct {
+	IDs []string `json:"ids"`
+}
+
+// handleSetOrder sets the display order of all Hosts.
+func (s *Server) handleSetOrder(w http.ResponseWriter, r *http.Request) {
+	var req hostOrderRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := s.store.SetHostOrder(r.Context(), req.IDs); errors.Is(err, store.ErrInvalidOrder) {
+		writeError(w, http.StatusBadRequest, "invalid_order")
+		return
+	} else if err != nil {
+		s.internalError(w, err)
+		return
+	}
+	s.hub.publish(liveMessage{Type: "hosts_changed"})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type tokenResponse struct {
+	Token string `json:"token"`
+}
+
+// handleRegenerateToken replaces a Host's token. The old one stops working at
+// once; the new one is revealed only in this response.
+func (s *Server) handleRegenerateToken(w http.ResponseWriter, r *http.Request) {
+	token, err := newHostToken()
+	if err != nil {
+		s.internalError(w, err)
+		return
+	}
+	found, err := s.store.SetHostToken(r.Context(), r.PathValue("id"), hashToken(token))
+	if err != nil {
+		s.internalError(w, err)
+		return
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "not_found")
+		return
+	}
+	writeJSON(w, http.StatusOK, tokenResponse{Token: token})
+}
+
+// handleDeleteHost removes a Host and everything the Dashboard holds about it.
+func (s *Server) handleDeleteHost(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	found, err := s.store.DeleteHost(r.Context(), id)
+	if err != nil {
+		s.internalError(w, err)
+		return
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "not_found")
+		return
+	}
+	s.latest.delete(id)
+	s.markOnline(id)
 	s.hub.publish(liveMessage{Type: "hosts_changed"})
 	w.WriteHeader(http.StatusNoContent)
 }

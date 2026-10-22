@@ -69,6 +69,12 @@ func (l *latestReports) set(hostID string, r reportView) {
 	l.byHost[hostID] = r
 }
 
+func (l *latestReports) delete(hostID string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.byHost, hostID)
+}
+
 // each calls f for every Host's latest Report.
 func (l *latestReports) each(f func(hostID string, r reportView)) {
 	l.mu.RLock()

@@ -61,7 +61,12 @@ export type Host = {
   ipv4?: string
   ipv6?: string
   country_override: string
+  group: string
+  /** Left off the public Status page. */
+  hidden: boolean
 }
+
+export type HostUpdate = Partial<Pick<Host, 'name' | 'group' | 'hidden' | 'country_override'>>
 
 export type Status = {
   dashboard_version: string
@@ -142,6 +147,21 @@ export function liveURL(): string {
   return `${scheme}//${location.host}/api/live`
 }
 
-export async function setCountryOverride(hostId: string, country: string): Promise<void> {
-  await request('PUT', `/api/hosts/${encodeURIComponent(hostId)}/country`, { country })
+const hostPath = (id: string) => `/api/hosts/${encodeURIComponent(id)}`
+
+export async function updateHost(id: string, update: HostUpdate): Promise<void> {
+  await request('PATCH', hostPath(id), update)
+}
+
+export async function setHostOrder(ids: string[]): Promise<void> {
+  await request('PUT', '/api/hosts/order', { ids })
+}
+
+/** regenerateToken revokes a Host's token and returns the new one, shown once. */
+export async function regenerateToken(id: string): Promise<string> {
+  return ((await (await request('POST', `${hostPath(id)}/token`)).json()) as { token: string }).token
+}
+
+export async function deleteHost(id: string): Promise<void> {
+  await request('DELETE', hostPath(id))
 }

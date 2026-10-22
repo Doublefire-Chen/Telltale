@@ -39,7 +39,7 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
     password: opts.password ?? 'correct horse battery',
     authenticated: opts.authenticated ?? false,
     hosts: opts.hosts ?? [],
-    countryRequests: [] as { id: string; country: string }[],
+    requests: [] as { method: string; path: string; body: Record<string, unknown> }[],
   }
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -80,19 +80,37 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
           agent_outdated: false,
           countries: [],
           country_override: '',
+          group: '',
+          hidden: false,
         }
         state.hosts = [...state.hosts, host]
         return json(201, { id: host.id, name, token: 'tt_' + 'A'.repeat(43) })
       }
-      const country = path.match(/^\/api\/hosts\/([^/]+)\/country$/)
-      if (country && method === 'PUT') {
-        const code = String(body.country).trim().toUpperCase()
-        if (code !== '' && !/^[A-Z]{2}$/.test(code)) return json(400, { error: 'invalid_country' })
-        state.hosts = state.hosts.map((h) =>
-          h.id === country[1] ? { ...h, country_override: code, countries: code ? [code] : h.countries } : h,
-        )
-        state.countryRequests.push({ id: country[1], country: code })
+      if (path === '/api/hosts/order' && method === 'PUT') {
+        const ids: string[] = body.ids
+        state.hosts = ids.map((id) => state.hosts.find((h) => h.id === id)!)
+        state.requests.push({ method, path, body })
         return new Response(null, { status: 204 })
+      }
+      const one = path.match(/^\/api\/hosts\/([^/]+)(\/token)?$/)
+      const target = one && state.hosts.find((h) => h.id === one[1])
+      if (one && !target) return json(404, { error: 'not_found' })
+      if (one && target) {
+        state.requests.push({ method, path, body })
+        if (one[2] && method === 'POST') return json(200, { token: 'tt_' + 'N'.repeat(43) })
+        if (method === 'DELETE') {
+          state.hosts = state.hosts.filter((h) => h !== target)
+          return new Response(null, { status: 204 })
+        }
+        if (method === 'PATCH') {
+          if (body.country_override && !/^[A-Z]{2}$/.test(body.country_override)) {
+            return json(400, { error: 'invalid_country' })
+          }
+          const updated = { ...target, ...body }
+          updated.countries = updated.country_override ? [updated.country_override] : target.countries
+          state.hosts = state.hosts.map((h) => (h === target ? updated : h))
+          return new Response(null, { status: 204 })
+        }
       }
       return json(404, { error: 'not_found' })
     }),

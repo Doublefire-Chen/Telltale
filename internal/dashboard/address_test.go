@@ -154,8 +154,8 @@ func TestCountryOverride(t *testing.T) {
 	hostInfoFrom(t, handler, host.Token, "198.51.100.9:50000", nil)
 
 	put := func(country string) *http.Response {
-		body, _ := json.Marshal(map[string]string{"country": country})
-		return h.do(http.MethodPut, "/api/hosts/"+host.ID+"/country", string(body), session)
+		body, _ := json.Marshal(map[string]string{"country_override": country})
+		return h.do(http.MethodPatch, "/api/hosts/"+host.ID, string(body), session)
 	}
 	expectStatus(t, put("jp"), http.StatusNoContent)
 	if v := h.addresses(session)["anycast"]; strings.Join(v.Countries, ",") != "JP" || v.CountryOverride != "JP" {
@@ -167,9 +167,9 @@ func TestCountryOverride(t *testing.T) {
 	}
 
 	expectError(t, put("Japan"), http.StatusBadRequest, "invalid_country")
-	body, _ := json.Marshal(map[string]string{"country": "JP"})
-	expectError(t, h.do(http.MethodPut, "/api/hosts/nope/country", string(body), session), http.StatusNotFound, "not_found")
-	expectError(t, h.do(http.MethodPut, "/api/hosts/"+host.ID+"/country", string(body), nil), http.StatusUnauthorized, "unauthenticated")
+	body, _ := json.Marshal(map[string]string{"country_override": "JP"})
+	expectError(t, h.do(http.MethodPatch, "/api/hosts/nope", string(body), session), http.StatusNotFound, "not_found")
+	expectError(t, h.do(http.MethodPatch, "/api/hosts/"+host.ID, string(body), nil), http.StatusUnauthorized, "unauthenticated")
 }
 
 func TestStaleAddressesDisappear(t *testing.T) {
