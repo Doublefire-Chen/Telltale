@@ -126,18 +126,38 @@ func diskUsage(ctx context.Context) (used, total *uint64) {
 	if err != nil {
 		return nil, nil
 	}
+	return diskUsageOf(parts, runtime.GOOS, func(path string) (*disk.UsageStat, error) {
+		return disk.UsageWithContext(ctx, path)
+	})
+}
+
+// diskUsageOf sums usage over the counted partitions. Where none counts, as
+// in a container whose root is overlay (Docker, many LXC VPSes), it falls
+// back to the usage of the root filesystem, which reports the storage the
+// container actually lives on.
+func diskUsageOf(parts []disk.PartitionStat, goos string, usage func(string) (*disk.UsageStat, error)) (used, total *uint64) {
 	var usages []fsUsage
 	for _, p := range parts {
-		if !countedPartition(p, runtime.GOOS) {
+		if !countedPartition(p, goos) {
 			continue
 		}
-		u, err := disk.UsageWithContext(ctx, p.Mountpoint)
+		u, err := usage(p.Mountpoint)
 		if err != nil {
 			continue
 		}
 		usages = append(usages, fsUsage{device: p.Device, total: u.Total, free: u.Free, used: u.Used})
 	}
-	return sumDisk(usages)
+	if used, total = sumDisk(usages); used != nil {
+		return used, total
+	}
+	root := "/"
+	if goos == "windows" {
+		root = `C:\`
+	}
+	if u, err := usage(root); err == nil && u.Total > 0 {
+		return &u.Used, &u.Total
+	}
+	return nil, nil
 }
 
 // countedPartition reports whether a mounted filesystem is real local storage.

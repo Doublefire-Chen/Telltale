@@ -1,0 +1,47 @@
+[Unit]
+Description=Telltale Agent (reports this Host's metrics to a Telltale Dashboard)
+Documentation=https://github.com/Doublefire-Chen/Telltale
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=telltale-agent
+Group=telltale-agent
+ExecStart=/usr/local/bin/telltale-agent -config /etc/telltale/agent.toml
+Restart=always
+RestartSec=5
+
+# The Agent only reads /proc, /sys and filesystem sizes and talks to the
+# Dashboard over HTTPS. It needs no privileges and writes nothing.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+# read-only rather than yes: disk usage needs statfs on /home if it is a
+# separate filesystem.
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+# Go raises its open-file limit at start-up (setrlimit, in @resources), so
+# that group stays allowed; anything filtered fails with EPERM, not SIGSYS.
+SystemCallErrorNumber=EPERM
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+# Telltale Dashboard configuration (/etc/telltale/dashboard.toml).
+# Every setting is optional; these are the defaults.
+
+# Addresses to serve on. Keep these on loopback and put nginx (or another
+# reverse proxy) in front for HTTPS: see deploy/nginx/telltale.conf.
+listen = ["127.0.0.1:8080", "[::1]:8080"]
+
+# Where all state lives (the SQLite database).
+data_dir = "/var/lib/telltale"
+
+# Reverse proxies whose X-Forwarded-For / X-Real-IP headers are believed.
+# Only list proxies you run: anyone else could fake a Host's address.
+trusted_proxies = ["127.0.0.0/8", "::1"]
+
+# How long history is kept: every Report, 1-minute averages, 15-minute averages.
+history_raw = "1h"
+history_minute = "7d"
+history_quarter = "90d"
+
+# A MaxMind-format country database to use instead of the built-in DB-IP Lite.
+# geoip_db = "/var/lib/telltale/GeoLite2-Country.mmdb"

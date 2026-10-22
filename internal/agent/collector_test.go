@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"testing"
 
@@ -128,5 +129,32 @@ func TestCountedPartition(t *testing.T) {
 		if got := countedPartition(tc.p, tc.goos); got != tc.want {
 			t.Errorf("%s %v on %s: counted=%v, want %v", tc.p.Fstype, tc.p.Opts, tc.goos, got, tc.want)
 		}
+	}
+}
+
+func TestDiskFallsBackToRootInContainers(t *testing.T) {
+	usage := func(path string) (*disk.UsageStat, error) {
+		switch path {
+		case "/":
+			return &disk.UsageStat{Total: 100, Free: 70, Used: 30}, nil
+		case "/data":
+			return &disk.UsageStat{Total: 500, Free: 100, Used: 400}, nil
+		}
+		return nil, fmt.Errorf("no such mount %s", path)
+	}
+	// A container: root is overlay, the rest are pseudo filesystems.
+	container := []disk.PartitionStat{
+		{Device: "overlay", Mountpoint: "/", Fstype: "overlay"},
+		{Device: "tmpfs", Mountpoint: "/dev", Fstype: "tmpfs"},
+	}
+	used, total := diskUsageOf(container, "linux", usage)
+	if used == nil || *used != 30 || *total != 100 {
+		t.Fatalf("container: used=%v total=%v, want the root filesystem's 30/100", used, total)
+	}
+	// With a real filesystem, root is not added on top.
+	real := append(container, disk.PartitionStat{Device: "/dev/vdb1", Mountpoint: "/data", Fstype: "ext4"})
+	used, total = diskUsageOf(real, "linux", usage)
+	if *used != 400 || *total != 500 {
+		t.Fatalf("with a real filesystem: used=%d total=%d, want 400/500", *used, *total)
 	}
 }
