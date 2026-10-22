@@ -1,0 +1,16 @@
+{
+  "hostname": "vps-tokyo",
+  "os": "linux",
+  "platform": "ubuntu",
+  "platform_version": "24.04",
+  "kernel_version": "6.8.0-45-generic",
+  "arch": "x86_64",
+  "cpu_model": "AMD EPYC 7B13",
+  "cpu_cores": 2,
+  "memory_total": 2147483648,
+  "swap_total": 1073741824,
+  "disk_total": 53687091200,
+  "virtualization": "kvm",
+  "boot_time": 1789049192,
+  "agent_version": "v0.1.0"
+}
