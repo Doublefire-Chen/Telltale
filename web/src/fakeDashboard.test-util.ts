@@ -76,6 +76,7 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
           name,
           host_info: null,
           report: null,
+          online: false,
           agent_outdated: false,
           countries: [],
           country_override: '',

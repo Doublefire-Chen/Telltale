@@ -45,6 +45,9 @@ export const zhCN: Translation = {
     uptimeMinutes: '{{m}}分钟',
     ip: 'IP',
     settings: '{{name}} 的设置',
+    online: '在线',
+    offline: '离线',
+    waiting: '等待首次上报',
   },
   addHost: {
     title: '添加主机',

@@ -18,6 +18,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Doublefire-Chen/Telltale/internal/dashboard/geoip"
@@ -35,6 +36,11 @@ const (
 
 	loginMaxFailures = 5
 	loginWindow      = 15 * time.Minute
+
+	// Agents retry every interval, so a few rejections are normal; a burst
+	// from one address is someone guessing tokens.
+	agentMaxFailures   = 20
+	agentFailureWindow = time.Minute
 
 	maxJSONBody = 4 << 10
 )
@@ -54,6 +60,9 @@ type Options struct {
 	TrustedProxies []netip.Prefix
 	// GeoIP resolves countries; nil leaves them unknown.
 	GeoIP *geoip.DB
+	// SweepInterval is how often Run looks for Hosts that went Offline;
+	// defaults to one second.
+	SweepInterval time.Duration
 }
 
 // Server is the Dashboard's HTTP handler.
@@ -66,20 +75,33 @@ type Server struct {
 	now            func() time.Time
 	logger         *slog.Logger
 	logins         *failureLimiter
-	latest         latestReports
-	hub            hub
-	mux            *http.ServeMux
+	// agentFailures rate-limits rejected Agent requests per client address.
+	agentFailures *failureLimiter
+	latest        latestReports
+	hub           hub
+	mux           *http.ServeMux
+
+	sweepEvery time.Duration
+	// offline holds the Hosts last announced as Offline; guarded by offlineMu.
+	offlineMu sync.Mutex
+	offline   map[string]bool
 }
 
 // New builds a Server from opts.
 func New(opts Options) *Server {
 	s := &Server{
-		store:  opts.Store,
-		app:    opts.App,
-		now:    opts.Now,
-		logger: opts.Logger,
-		logins: newFailureLimiter(loginMaxFailures, loginWindow),
-		mux:    http.NewServeMux(),
+		store:         opts.Store,
+		app:           opts.App,
+		now:           opts.Now,
+		logger:        opts.Logger,
+		logins:        newFailureLimiter(loginMaxFailures, loginWindow),
+		agentFailures: newFailureLimiter(agentMaxFailures, agentFailureWindow),
+		mux:           http.NewServeMux(),
+		sweepEvery:    opts.SweepInterval,
+		offline:       make(map[string]bool),
+	}
+	if s.sweepEvery <= 0 {
+		s.sweepEvery = time.Second
 	}
 	if s.now == nil {
 		s.now = time.Now
@@ -111,6 +133,46 @@ func New(opts Options) *Server {
 	})
 	s.mux.HandleFunc("/", s.handleApp)
 	return s
+}
+
+// Run does the Dashboard's background work until ctx ends: it announces
+// Hosts that go Offline to the Status page.
+func (s *Server) Run(ctx context.Context) {
+	ticker := time.NewTicker(s.sweepEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.sweepOffline()
+		}
+	}
+}
+
+// sweepOffline publishes an "offline" message for each Host that has missed
+// three intervals since it was last announced online.
+func (s *Server) sweepOffline() {
+	now := s.now()
+	var newlyOffline []string
+	s.offlineMu.Lock()
+	s.latest.each(func(id string, r reportView) {
+		if !online(r, now) && !s.offline[id] {
+			s.offline[id] = true
+			newlyOffline = append(newlyOffline, id)
+		}
+	})
+	s.offlineMu.Unlock()
+	for _, id := range newlyOffline {
+		s.hub.publish(liveMessage{Type: "offline", HostID: id})
+	}
+}
+
+// markOnline records that a Host reported, so a later lapse is announced again.
+func (s *Server) markOnline(hostID string) {
+	s.offlineMu.Lock()
+	delete(s.offline, hostID)
+	s.offlineMu.Unlock()
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

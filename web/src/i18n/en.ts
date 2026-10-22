@@ -44,6 +44,9 @@ export const en = {
     uptimeMinutes: '{{m}}m',
     ip: 'IP',
     settings: 'Settings for {{name}}',
+    online: 'Online',
+    offline: 'Offline',
+    waiting: 'Waiting for the first Report',
   },
   addHost: {
     title: 'Add Host',

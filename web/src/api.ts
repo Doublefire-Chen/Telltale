@@ -52,6 +52,8 @@ export type Host = {
   name: string
   host_info: HostInfo | null
   report: Report | null
+  /** False once the Host missed three intervals (Offline), or before its first Report. */
+  online: boolean
   agent_outdated: boolean
   /** ISO country codes to show as flags (override, else IPv4/IPv6 countries). */
   countries: string[]
@@ -75,6 +77,7 @@ export type AddedHost = {
 
 export type LiveMessage =
   | { type: 'report'; host_id: string; report: Report }
+  | { type: 'offline'; host_id: string }
   | { type: 'hosts_changed' }
 
 export class ApiError extends Error {

@@ -38,7 +38,11 @@ export function StatusPage() {
       void load()
       return
     }
-    setHosts((prev) => prev?.map((h) => (h.id === msg.host_id ? { ...h, report: msg.report } : h)) ?? prev)
+    if (msg.type === 'offline') {
+      setHosts((prev) => prev?.map((h) => (h.id === msg.host_id ? { ...h, online: false } : h)) ?? prev)
+      return
+    }
+    setHosts((prev) => prev?.map((h) => (h.id === msg.host_id ? { ...h, report: msg.report, online: true } : h)) ?? prev)
   })
 
   if (failed) return <p role="alert">{t('app.error')}</p>
@@ -149,10 +153,12 @@ function HostRow({ host: h, dashboardVersion, now, open, onToggle, onChanged }: 
   const r = h.report
   const info = h.host_info
   const name = h.name || info?.hostname || t('status.unnamed')
+  const state = h.online ? 'online' : h.report ? 'offline' : 'waiting'
   return (
     <>
-      <tr>
+      <tr className={state === 'offline' ? 'offline' : undefined}>
         <th scope="row">
+          <span className={`dot ${state}`} role="img" aria-label={t(`status.${state}`)} title={t(`status.${state}`)} />
           <Flags countries={h.countries} />
           <span className="host-name">{name}</span>
           {h.agent_outdated && (

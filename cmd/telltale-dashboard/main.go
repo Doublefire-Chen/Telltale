@@ -93,10 +93,11 @@ func serve(cfg config.Config, stderr io.Writer) error {
 	if app == nil {
 		logger.Warn("web app not built into this binary; serving a placeholder page")
 	}
+	handler := dashboard.New(dashboard.Options{
+		Store: st, App: app, Logger: logger, TrustedProxies: proxies, GeoIP: geo,
+	})
 	srv := &http.Server{
-		Handler: dashboard.New(dashboard.Options{
-			Store: st, App: app, Logger: logger, TrustedProxies: proxies, GeoIP: geo,
-		}),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}
@@ -124,6 +125,7 @@ func serve(cfg config.Config, stderr io.Writer) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go handler.Run(ctx)
 	select {
 	case err := <-errc:
 		return err

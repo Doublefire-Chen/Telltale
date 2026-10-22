@@ -27,6 +27,9 @@ type hostView struct {
 	Name     string       `json:"name"`
 	HostInfo *v1.HostInfo `json:"host_info"`
 	Report   *reportView  `json:"report"`
+	// Online is set while the Host keeps reporting; false once it has
+	// missed three intervals (Offline) or before its first Report.
+	Online bool `json:"online"`
 	// AgentOutdated is set when the Host's Agent is older than this Dashboard.
 	AgentOutdated bool `json:"agent_outdated"`
 	// Countries are the ISO codes to show as flags: the manual override if
@@ -69,6 +72,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		}
 		if rep, ok := s.latest.get(h.ID); ok {
 			v.Report = &rep
+			v.Online = online(rep, s.now())
 		}
 		s.addAddresses(&v, h)
 		resp.Hosts = append(resp.Hosts, v)

@@ -1,10 +1,12 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -365,4 +367,64 @@ func TestHostInfoSentOverBothIPFamilies(t *testing.T) {
 		defer mu.Unlock()
 		return from["127.0.0.1"] && from["::1"]
 	})
+}
+
+// TestResumesWithoutBacklogAfterOutage starts the Agent while nothing listens
+// at the Dashboard's address, then brings the Dashboard up: the Agent resumes
+// at its normal pace with current Reports, replaying nothing from the outage.
+func TestResumesWithoutBacklogAfterOutage(t *testing.T) {
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	ln.Close() // nothing listens here yet
+
+	d := &fakeDashboard{}
+	s := newSender("http://"+addr, testToken, 20*time.Millisecond, "dev", &fakeCollector{}, nil, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go s.Run(ctx)
+
+	time.Sleep(200 * time.Millisecond) // about ten intervals of outage
+	ln, err = net.Listen("tcp4", addr)
+	if err != nil {
+		t.Skipf("could not reclaim %s: %v", addr, err)
+	}
+	up := time.Now()
+	srv := &http.Server{Handler: d}
+	go srv.Serve(ln)
+	defer srv.Close()
+
+	time.Sleep(50 * time.Millisecond) // about two intervals after recovery
+	reports := onPath(d.snapshot(), v1.ReportPath)
+	if len(reports) == 0 {
+		t.Fatal("Agent did not resume reporting")
+	}
+	if len(reports) > 4 {
+		t.Fatalf("%d Reports within 50ms of recovery: the outage was replayed", len(reports))
+	}
+	if first := time.UnixMilli(reports[0].report.Time); first.Before(up.Add(-25 * time.Millisecond)) {
+		t.Fatalf("first Report after recovery was sampled %v before the Dashboard came up", up.Sub(first))
+	}
+}
+
+func TestLogsRejectionOnceAndKeepsInterval(t *testing.T) {
+	d := &fakeDashboard{respond: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusUnauthorized) }}
+	srv := httptest.NewServer(d)
+	defer srv.Close()
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+
+	start := time.Now()
+	reqs := runFor(t, newSender(srv.URL, testToken, 20*time.Millisecond, "dev", &fakeCollector{}, logger, nil), d, 6)
+	elapsed := time.Since(start)
+
+	if n := strings.Count(logs.String(), "rejected the Host token"); n != 1 {
+		t.Fatalf("logged the rejection %d times, want once:\n%s", n, logs.String())
+	}
+	// Six Reports take about five intervals: the Agent neither hammers nor backs off.
+	if reports := onPath(reqs, v1.ReportPath); elapsed < 5*20*time.Millisecond || elapsed > 1*time.Second {
+		t.Fatalf("%d Reports took %v at a 20ms interval", len(reports), elapsed)
+	}
 }

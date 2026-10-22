@@ -3,7 +3,9 @@ package dashboard
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Doublefire-Chen/Telltale/internal/dashboard/store"
 	v1 "github.com/Doublefire-Chen/Telltale/internal/protocol/v1"
@@ -12,9 +14,20 @@ import (
 // authenticateAgent identifies the Host by its Bearer token, answering 401 if
 // it is missing or unknown. Per ADR 0001 responses to Agents are bare status
 // codes: Agents read nothing else, so nothing else is sent.
+//
+// An address with too many rejections in a short time gets 429 without its
+// token being looked up.
 func (s *Server) authenticateAgent(w http.ResponseWriter, r *http.Request) (store.Host, bool) {
+	key := s.clientIP(r).String()
+	now := s.now()
+	if blocked, wait := s.agentFailures.blocked(key, now); blocked {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Round(time.Second).Seconds())))
+		w.WriteHeader(http.StatusTooManyRequests)
+		return store.Host{}, false
+	}
 	token, ok := bearerToken(r)
 	if !ok {
+		s.agentFailures.fail(key, now)
 		w.WriteHeader(http.StatusUnauthorized)
 		return store.Host{}, false
 	}
@@ -25,6 +38,7 @@ func (s *Server) authenticateAgent(w http.ResponseWriter, r *http.Request) (stor
 		return store.Host{}, false
 	}
 	if !ok {
+		s.agentFailures.fail(key, now)
 		w.WriteHeader(http.StatusUnauthorized)
 		return store.Host{}, false
 	}
@@ -59,6 +73,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	prev, havePrev := s.latest.get(host.ID)
 	view := withBandwidth(reportView{ReceivedAt: s.now().UnixMilli(), Report: rep}, prev, havePrev)
 	s.latest.set(host.ID, view)
+	s.markOnline(host.ID)
 	s.hub.publish(liveMessage{Type: "report", HostID: host.ID, Report: &view})
 	w.WriteHeader(http.StatusNoContent)
 }

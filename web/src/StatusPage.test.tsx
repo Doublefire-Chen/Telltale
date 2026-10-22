@@ -38,7 +38,16 @@ const hostInfo: HostInfo = {
 }
 
 function host(h: Partial<Host> & Pick<Host, 'id'>): Host {
-  return { name: '', host_info: null, report: null, agent_outdated: false, countries: [], country_override: '', ...h }
+  return {
+    name: '',
+    host_info: null,
+    report: null,
+    online: false,
+    agent_outdated: false,
+    countries: [],
+    country_override: '',
+    ...h,
+  }
 }
 
 function row(name: string) {
@@ -68,6 +77,7 @@ describe('Status page', () => {
     expect(within(row('new-box')).getAllByText(/^—$|—$/)).toHaveLength(13)
     // No country yet: a neutral globe instead of a flag.
     expect(within(row('new-box')).getByRole('img', { name: '—' })).toBeTruthy()
+    expect(within(row('new-box')).getByRole('img', { name: 'Waiting for the first Report' })).toBeTruthy()
   })
 
   it('shows every metric, using Host Info for totals, system and Uptime', async () => {
@@ -157,7 +167,8 @@ describe('Status page', () => {
     expect(jp.tagName).toBe('IMG')
     expect(jp.getAttribute('src')).toMatch(/jp\.svg/)
     expect(jp.getAttribute('title')).toBe('JP')
-    expect(within(row('two')).getAllByRole('img').map((i) => i.getAttribute('alt'))).toEqual(['US', 'DE'])
+    const flags = [...row('two').querySelectorAll('img.flag')].map((i) => i.getAttribute('alt'))
+    expect(flags).toEqual(['US', 'DE'])
   })
 
   it('sets and clears a country override from the Host settings', async () => {
@@ -181,14 +192,31 @@ describe('Status page', () => {
   })
 
   it('updates live from the WebSocket without reloading', async () => {
-    stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'tokyo', report })] })
+    stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'tokyo', report, online: true })] })
     render(<App />)
     await screen.findByText('37.5%')
+    expect(within(row('tokyo')).getByRole('img', { name: 'Online' })).toBeTruthy()
 
     const socket = FakeWebSocket.instances.at(-1)!
     expect(socket.url).toMatch(/\/api\/live$/)
     act(() => socket.emit({ type: 'report', host_id: 'h1', report: { ...report, cpu_percent: 81 } }))
     expect(await screen.findByText('81%')).toBeTruthy()
+  })
+
+  it('shows a Host going Offline and coming back, live', async () => {
+    stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'tokyo', report, online: true })] })
+    render(<App />)
+    await screen.findByText('37.5%')
+    const socket = FakeWebSocket.instances.at(-1)!
+
+    act(() => socket.emit({ type: 'offline', host_id: 'h1' }))
+    expect(within(row('tokyo')).getByRole('img', { name: 'Offline' })).toBeTruthy()
+    expect(row('tokyo').className).toBe('offline')
+    // The last known values stay visible, dimmed.
+    expect(within(row('tokyo')).getByText('37.5%')).toBeTruthy()
+
+    act(() => socket.emit({ type: 'report', host_id: 'h1', report }))
+    expect(within(row('tokyo')).getByRole('img', { name: 'Online' })).toBeTruthy()
   })
 
   it('adds a Host and shows its token exactly once as an Agent config', async () => {

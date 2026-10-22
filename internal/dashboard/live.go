@@ -69,6 +69,15 @@ func (l *latestReports) set(hostID string, r reportView) {
 	l.byHost[hostID] = r
 }
 
+// each calls f for every Host's latest Report.
+func (l *latestReports) each(f func(hostID string, r reportView)) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	for id, r := range l.byHost {
+		f(id, r)
+	}
+}
+
 func (l *latestReports) get(hostID string) (reportView, bool) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -76,9 +85,19 @@ func (l *latestReports) get(hostID string) (reportView, bool) {
 	return r, ok
 }
 
+// offlineAfterIntervals is how many report intervals may pass without a
+// Report before a Host is Offline.
+const offlineAfterIntervals = 3
+
+// online reports whether a Host whose latest Report is r counts as online at now.
+func online(r reportView, now time.Time) bool {
+	return now.UnixMilli()-r.ReceivedAt <= offlineAfterIntervals*r.IntervalMS
+}
+
 // liveMessage is pushed to Status page browsers over the live WebSocket.
 type liveMessage struct {
-	// Type is "report" (a Host sent a Report) or "hosts_changed" (refetch the Host list).
+	// Type is "report" (a Host sent a Report, so it is online), "offline" (a
+	// Host missed three intervals) or "hosts_changed" (refetch the Host list).
 	Type   string      `json:"type"`
 	HostID string      `json:"host_id,omitempty"`
 	Report *reportView `json:"report,omitempty"`
