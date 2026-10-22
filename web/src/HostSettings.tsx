@@ -64,7 +64,8 @@ export function HostSettings({ host, displayName, canMoveUp, canMoveDown, onMove
   }
 
   return (
-    <form className="settings" onSubmit={save}>
+    <form className="card settings" onSubmit={save} aria-label={t('status.settings', { name: displayName })}>
+      <h2>{t('status.settings', { name: displayName })}</h2>
       <div className="settings-fields">
         <label>
           {t('hostSettings.name')}

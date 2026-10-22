@@ -127,40 +127,42 @@ function HostTable({ hosts, dashboardVersion, onChanged }: HostTableProps) {
     await onChanged()
   }
 
+  const editing = displayed.find((h) => h.id === openSettings)
+  const editingIndex = editing ? displayed.indexOf(editing) : -1
+
   return (
-    <div className="table-scroll">
-      <table className="hosts">
-        <thead>
-          <tr>
-            <th scope="col">{t('status.name')}</th>
-            <th scope="col">{t('status.ip')}</th>
-            <th scope="col">{t('status.system')}</th>
-            <th scope="col">{t('status.uptime')}</th>
-            <th scope="col">{t('status.cpu')}</th>
-            <th scope="col">{t('status.load')}</th>
-            <th scope="col">{t('status.memory')}</th>
-            <th scope="col">{t('status.swap')}</th>
-            <th scope="col">{t('status.disk')}</th>
-            <th scope="col">{t('status.bandwidth')}</th>
-            <th scope="col">{t('status.traffic')}</th>
-            <th scope="col">
-              <span className="visually-hidden">{t('hostSettings.save')}</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {groups.map((g) => (
-            <Fragment key={g.group}>
-              {g.group && (
-                <tr className="group-row">
-                  <th scope="colgroup" colSpan={columnCount}>
-                    {g.group}
-                  </th>
-                </tr>
-              )}
-              {g.hosts.map((h) => {
-                const index = displayed.indexOf(h)
-                return (
+    <>
+      <div className="table-scroll">
+        <table className="hosts">
+          <thead>
+            <tr>
+              <th scope="col">{t('status.name')}</th>
+              <th scope="col">{t('status.ip')}</th>
+              <th scope="col">{t('status.system')}</th>
+              <th scope="col">{t('status.uptime')}</th>
+              <th scope="col">{t('status.cpu')}</th>
+              <th scope="col">{t('status.load')}</th>
+              <th scope="col">{t('status.memory')}</th>
+              <th scope="col">{t('status.swap')}</th>
+              <th scope="col">{t('status.disk')}</th>
+              <th scope="col">{t('status.bandwidth')}</th>
+              <th scope="col">{t('status.traffic')}</th>
+              <th scope="col">
+                <span className="visually-hidden">{t('hostSettings.save')}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) => (
+              <Fragment key={g.group}>
+                {g.group && (
+                  <tr className="group-row">
+                    <th scope="colgroup" colSpan={columnCount}>
+                      {g.group}
+                    </th>
+                  </tr>
+                )}
+                {g.hosts.map((h) => (
                   <HostRow
                     key={h.id}
                     host={h}
@@ -168,18 +170,26 @@ function HostTable({ hosts, dashboardVersion, onChanged }: HostTableProps) {
                     now={now}
                     open={openSettings === h.id}
                     onToggle={() => setOpenSettings(openSettings === h.id ? null : h.id)}
-                    onChanged={onChanged}
-                    canMoveUp={index > 0}
-                    canMoveDown={index < displayed.length - 1}
-                    onMove={(direction) => move(h.id, direction)}
                   />
-                )
-              })}
-            </Fragment>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                ))}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {editing && (
+        <HostSettings
+          key={editing.id}
+          host={editing}
+          displayName={displayName(editing, t('status.unnamed'))}
+          canMoveUp={editingIndex > 0}
+          canMoveDown={editingIndex < displayed.length - 1}
+          onMove={(direction) => move(editing.id, direction)}
+          onClose={() => setOpenSettings(null)}
+          onChanged={onChanged}
+        />
+      )}
+    </>
   )
 }
 
@@ -189,21 +199,21 @@ type HostRowProps = {
   now: number
   open: boolean
   onToggle: () => void
-  onChanged: () => Promise<void>
-  canMoveUp: boolean
-  canMoveDown: boolean
-  onMove: (direction: -1 | 1) => Promise<void>
 }
 
-const columnCount = 13
+const columnCount = 12
 
-function HostRow(props: HostRowProps) {
-  const { host: h, dashboardVersion, now, open, onToggle, onChanged } = props
+/** displayName is what the Status page calls a Host: its name, else its hostname. */
+function displayName(h: Host, unnamed: string): string {
+  return h.name || h.host_info?.hostname || unnamed
+}
+
+function HostRow({ host: h, dashboardVersion, now, open, onToggle }: HostRowProps) {
   const { t, i18n } = useTranslation()
   const lang = i18n.resolvedLanguage ?? 'en'
   const r = h.report
   const info = h.host_info
-  const name = h.name || info?.hostname || t('status.unnamed')
+  const name = displayName(h, t('status.unnamed'))
   const state = h.online ? 'online' : h.report ? 'offline' : 'waiting'
   return (
     <>
@@ -255,21 +265,6 @@ function HostRow(props: HostRowProps) {
           </button>
         </td>
       </tr>
-      {open && (
-        <tr className="settings-row">
-          <td colSpan={columnCount}>
-            <HostSettings
-              host={h}
-              displayName={name}
-              canMoveUp={props.canMoveUp}
-              canMoveDown={props.canMoveDown}
-              onMove={props.onMove}
-              onClose={onToggle}
-              onChanged={onChanged}
-            />
-          </td>
-        </tr>
-      )}
     </>
   )
 }

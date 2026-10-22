@@ -56,7 +56,7 @@ body {
 }
 
 .main {
-  max-width: 960px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 24px 16px;
 }
@@ -142,6 +142,7 @@ pre {
 
 .visually-hidden {
   position: absolute;
+  left: 0;
   width: 1px;
   height: 1px;
   overflow: hidden;
@@ -200,7 +201,10 @@ pre {
   border-bottom: none;
 }
 
+/* position: relative keeps the table's visually-hidden labels inside the
+   scroll box; otherwise they widen the page and it scrolls sideways. */
 .table-scroll {
+  position: relative;
   overflow-x: auto;
 }
 
@@ -255,21 +259,6 @@ button.icon {
   line-height: 1.2;
 }
 
-.settings-row td {
-  background: var(--bg);
-}
-
-.settings {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
-  white-space: normal;
-}
-
-.settings input {
-  width: 6em;
-}
 
 .footer {
   padding: 16px;
@@ -303,9 +292,8 @@ tr.offline td {
   opacity: 0.55;
 }
 
-.settings {
-  flex-direction: column;
-  align-items: stretch;
+.stack > .card.settings {
+  max-width: none;
 }
 
 .settings-fields {
@@ -345,6 +333,7 @@ label.checkbox input {
 .danger-zone {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   padding-top: 12px;
@@ -354,8 +343,13 @@ label.checkbox input {
 .danger-zone > div {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 4px;
   max-width: 32em;
+}
+
+.danger-zone [role='alertdialog'] p {
+  margin: 0 0 8px;
 }
 
 button.danger {
