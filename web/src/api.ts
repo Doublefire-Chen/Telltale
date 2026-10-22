@@ -53,6 +53,12 @@ export type Host = {
   host_info: HostInfo | null
   report: Report | null
   agent_outdated: boolean
+  /** ISO country codes to show as flags (override, else IPv4/IPv6 countries). */
+  countries: string[]
+  /** Admin only. */
+  ipv4?: string
+  ipv6?: string
+  country_override: string
 }
 
 export type Status = {
@@ -131,4 +137,8 @@ export async function addHost(name: string): Promise<AddedHost> {
 export function liveURL(): string {
   const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${scheme}//${location.host}/api/live`
+}
+
+export async function setCountryOverride(hostId: string, country: string): Promise<void> {
+  await request('PUT', `/api/hosts/${encodeURIComponent(hostId)}/country`, { country })
 }

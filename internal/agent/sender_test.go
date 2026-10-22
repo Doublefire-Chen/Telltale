@@ -3,11 +3,14 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -318,4 +321,48 @@ func listDir(t *testing.T, dir string) string {
 		names = append(names, e.Name()+"@"+info.ModTime().String())
 	}
 	return strings.Join(names, ",")
+}
+
+// TestHostInfoSentOverBothIPFamilies serves one fake Dashboard on 127.0.0.1
+// and ::1 under the name "localhost" and checks Host Info reaches it over both.
+func TestHostInfoSentOverBothIPFamilies(t *testing.T) {
+	ln4, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln4.Addr().(*net.TCPAddr).Port
+	ln6, err := net.Listen("tcp6", fmt.Sprintf("[::1]:%d", port))
+	if err != nil {
+		ln4.Close()
+		t.Skipf("no IPv6 loopback: %v", err)
+	}
+	if addrs, _ := net.LookupHost("localhost"); !slices.Contains(addrs, "::1") || !slices.Contains(addrs, "127.0.0.1") {
+		ln4.Close()
+		ln6.Close()
+		t.Skipf("localhost does not resolve to both families: %v", addrs)
+	}
+
+	var mu sync.Mutex
+	from := map[string]bool{}
+	d := &fakeDashboard{}
+	d.respond = func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == v1.HostInfoPath {
+			host, _, _ := net.SplitHostPort(r.RemoteAddr)
+			mu.Lock()
+			from[host] = true
+			mu.Unlock()
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+	srv := &http.Server{Handler: d}
+	go srv.Serve(ln4)
+	go srv.Serve(ln6)
+	defer srv.Close()
+
+	s := newSender(fmt.Sprintf("http://localhost:%d", port), testToken, 10*time.Millisecond, "dev", &fakeCollector{}, nil, nil)
+	runUntil(t, s, d, func([]received) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return from["127.0.0.1"] && from["::1"]
+	})
 }

@@ -39,6 +39,7 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
     password: opts.password ?? 'correct horse battery',
     authenticated: opts.authenticated ?? false,
     hosts: opts.hosts ?? [],
+    countryRequests: [] as { id: string; country: string }[],
   }
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -70,9 +71,27 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
       if (path === '/api/hosts' && method === 'POST') {
         const name = String(body.name).trim()
         if (name.length > 64) return json(400, { error: 'invalid_name' })
-        const host: Host = { id: `h${state.hosts.length + 1}`, name, host_info: null, report: null, agent_outdated: false }
+        const host: Host = {
+          id: `h${state.hosts.length + 1}`,
+          name,
+          host_info: null,
+          report: null,
+          agent_outdated: false,
+          countries: [],
+          country_override: '',
+        }
         state.hosts = [...state.hosts, host]
         return json(201, { id: host.id, name, token: 'tt_' + 'A'.repeat(43) })
+      }
+      const country = path.match(/^\/api\/hosts\/([^/]+)\/country$/)
+      if (country && method === 'PUT') {
+        const code = String(body.country).trim().toUpperCase()
+        if (code !== '' && !/^[A-Z]{2}$/.test(code)) return json(400, { error: 'invalid_country' })
+        state.hosts = state.hosts.map((h) =>
+          h.id === country[1] ? { ...h, country_override: code, countries: code ? [code] : h.countries } : h,
+        )
+        state.countryRequests.push({ id: country[1], country: code })
+        return new Response(null, { status: 204 })
       }
       return json(404, { error: 'not_found' })
     }),

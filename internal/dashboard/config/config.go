@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/netip"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -20,13 +21,36 @@ type Config struct {
 	Listen []string `toml:"listen"`
 	// DataDir holds all Dashboard state (the SQLite database).
 	DataDir string `toml:"data_dir"`
+	// TrustedProxies are the addresses or CIDR ranges of reverse proxies whose
+	// X-Forwarded-For / X-Real-IP headers are believed. Defaults to loopback.
+	TrustedProxies []string `toml:"trusted_proxies"`
+	// GeoIPDB replaces the embedded GeoIP database with a MaxMind-format file.
+	GeoIPDB string `toml:"geoip_db"`
+}
+
+// Proxies parses TrustedProxies; plain addresses become single-address ranges.
+func (c Config) Proxies() ([]netip.Prefix, error) {
+	out := make([]netip.Prefix, 0, len(c.TrustedProxies))
+	for _, v := range c.TrustedProxies {
+		if p, err := netip.ParsePrefix(v); err == nil {
+			out = append(out, p.Masked())
+			continue
+		}
+		a, err := netip.ParseAddr(v)
+		if err != nil {
+			return nil, fmt.Errorf("trusted_proxies: %q is not an address or CIDR range", v)
+		}
+		out = append(out, netip.PrefixFrom(a, a.BitLen()))
+	}
+	return out, nil
 }
 
 // Default returns the configuration used when no file overrides it.
 func Default() Config {
 	return Config{
-		Listen:  []string{"127.0.0.1:8080", "[::1]:8080"},
-		DataDir: "/var/lib/telltale",
+		Listen:         []string{"127.0.0.1:8080", "[::1]:8080"},
+		DataDir:        "/var/lib/telltale",
+		TrustedProxies: []string{"127.0.0.0/8", "::1"},
 	}
 }
 
@@ -53,6 +77,9 @@ func Load(path string, allowMissing bool) (Config, error) {
 	}
 	if cfg.DataDir == "" {
 		return Config{}, fmt.Errorf("config %s: data_dir must not be empty", path)
+	}
+	if _, err := cfg.Proxies(); err != nil {
+		return Config{}, fmt.Errorf("config %s: %w", path, err)
 	}
 	return cfg, nil
 }

@@ -24,6 +24,7 @@ import (
 
 	"github.com/Doublefire-Chen/Telltale/internal/dashboard"
 	"github.com/Doublefire-Chen/Telltale/internal/dashboard/config"
+	"github.com/Doublefire-Chen/Telltale/internal/dashboard/geoip"
 	"github.com/Doublefire-Chen/Telltale/internal/dashboard/store"
 	"github.com/Doublefire-Chen/Telltale/internal/version"
 	"github.com/Doublefire-Chen/Telltale/web"
@@ -76,12 +77,26 @@ func serve(cfg config.Config, stderr io.Writer) error {
 	}
 	defer st.Close()
 
+	proxies, err := cfg.Proxies()
+	if err != nil {
+		return err
+	}
+	geo, err := geoip.Open(cfg.GeoIPDB)
+	if err != nil {
+		return err
+	}
+	if geo == nil {
+		logger.Warn("no GeoIP database built into this binary; countries will be unknown (run `make geoip` before building)")
+	}
+
 	app := web.App()
 	if app == nil {
 		logger.Warn("web app not built into this binary; serving a placeholder page")
 	}
 	srv := &http.Server{
-		Handler:           dashboard.New(dashboard.Options{Store: st, App: app, Logger: logger}),
+		Handler: dashboard.New(dashboard.Options{
+			Store: st, App: app, Logger: logger, TrustedProxies: proxies, GeoIP: geo,
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"time"
@@ -35,6 +36,11 @@ var migrations = []string{
 		created_at INTEGER NOT NULL
 	);`,
 	`ALTER TABLE hosts ADD COLUMN host_info TEXT;`,
+	`ALTER TABLE hosts ADD COLUMN ipv4 TEXT NOT NULL DEFAULT '';
+	ALTER TABLE hosts ADD COLUMN ipv4_seen_at INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE hosts ADD COLUMN ipv6 TEXT NOT NULL DEFAULT '';
+	ALTER TABLE hosts ADD COLUMN ipv6_seen_at INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE hosts ADD COLUMN country_override TEXT NOT NULL DEFAULT '';`,
 }
 
 // Store is the Dashboard's persistent state.
@@ -161,6 +167,12 @@ type Host struct {
 	CreatedAt time.Time
 	// HostInfo is the latest Host Info as JSON, or nil if none has arrived.
 	HostInfo []byte
+	// IPv4 and IPv6 are the source addresses of the Agent's last Host Info
+	// over each IP family (zero if never seen), and when each was last seen.
+	IPv4, IPv6             netip.Addr
+	IPv4SeenAt, IPv6SeenAt time.Time
+	// CountryOverride is the admin's manual ISO country code, or "".
+	CountryOverride string
 }
 
 // CreateHost registers a Host with the hash of its token.
@@ -170,19 +182,23 @@ func (s *Store) CreateHost(ctx context.Context, h Host, tokenHash []byte) error 
 	return err
 }
 
-const hostColumns = `id, name, created_at, host_info`
+const hostColumns = `id, name, created_at, host_info, ipv4, ipv4_seen_at, ipv6, ipv6_seen_at, country_override`
 
 func scanHost(scan func(...any) error) (Host, error) {
 	var h Host
-	var created int64
+	var created, v4Seen, v6Seen int64
 	var info sql.NullString
-	if err := scan(&h.ID, &h.Name, &created, &info); err != nil {
+	var v4, v6 string
+	if err := scan(&h.ID, &h.Name, &created, &info, &v4, &v4Seen, &v6, &v6Seen, &h.CountryOverride); err != nil {
 		return Host{}, err
 	}
 	h.CreatedAt = time.Unix(created, 0)
 	if info.Valid {
 		h.HostInfo = []byte(info.String)
 	}
+	h.IPv4, _ = netip.ParseAddr(v4)
+	h.IPv6, _ = netip.ParseAddr(v6)
+	h.IPv4SeenAt, h.IPv6SeenAt = time.Unix(v4Seen, 0), time.Unix(v6Seen, 0)
 	return h, nil
 }
 
@@ -216,8 +232,32 @@ func (s *Store) HostByTokenHash(ctx context.Context, tokenHash []byte) (Host, bo
 	return h, true, nil
 }
 
-// SetHostInfo stores a Host's latest Host Info (as JSON).
-func (s *Store) SetHostInfo(ctx context.Context, hostID string, info []byte) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE hosts SET host_info = ? WHERE id = ?`, string(info), hostID)
-	return err
+// SetHostInfo stores a Host's latest Host Info (as JSON) and the address it
+// arrived from, as that Host's IPv4 or IPv6 address.
+func (s *Store) SetHostInfo(ctx context.Context, hostID string, info []byte, from netip.Addr, at time.Time) error {
+	from = from.Unmap()
+	switch {
+	case from.Is4():
+		_, err := s.db.ExecContext(ctx, `UPDATE hosts SET host_info = ?, ipv4 = ?, ipv4_seen_at = ? WHERE id = ?`,
+			string(info), from.String(), at.Unix(), hostID)
+		return err
+	case from.Is6():
+		_, err := s.db.ExecContext(ctx, `UPDATE hosts SET host_info = ?, ipv6 = ?, ipv6_seen_at = ? WHERE id = ?`,
+			string(info), from.String(), at.Unix(), hostID)
+		return err
+	default:
+		_, err := s.db.ExecContext(ctx, `UPDATE hosts SET host_info = ? WHERE id = ?`, string(info), hostID)
+		return err
+	}
+}
+
+// SetCountryOverride sets (or, with "", clears) a Host's manual country.
+// It reports whether the Host exists.
+func (s *Store) SetCountryOverride(ctx context.Context, hostID, country string) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE hosts SET country_override = ? WHERE id = ?`, country, hostID)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }

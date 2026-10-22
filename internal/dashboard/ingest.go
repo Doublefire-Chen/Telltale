@@ -63,7 +63,9 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleHostInfo accepts Host Info from an Agent and stores it.
+// handleHostInfo accepts Host Info from an Agent and stores it. Agents send it
+// once over IPv4 and once over IPv6, so its source address is how the
+// Dashboard learns each of the Host's addresses (ADR 0004).
 func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 	host, ok := s.authenticateAgent(w, r)
 	if !ok {
@@ -78,7 +80,7 @@ func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if err := s.store.SetHostInfo(r.Context(), host.ID, stored); err != nil {
+	if err := s.store.SetHostInfo(r.Context(), host.ID, stored, s.clientIP(r), s.now()); err != nil {
 		s.logger.Error("store Host Info", "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return

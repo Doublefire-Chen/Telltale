@@ -44,6 +44,11 @@ export function App() {
         {view.kind === 'ready' && !view.session.setup_required && !authenticated && <Login onLoggedIn={refresh} />}
         {authenticated && <StatusPage />}
       </main>
+      <footer className="footer muted">
+        <a href="https://db-ip.com" target="_blank" rel="noreferrer">
+          {t('footer.geoip')}
+        </a>
+      </footer>
     </>
   )
 }

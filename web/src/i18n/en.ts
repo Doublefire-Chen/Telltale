@@ -42,6 +42,8 @@ export const en = {
     uptimeDays: '{{d}}d {{h}}h',
     uptimeHours: '{{h}}h {{m}}m',
     uptimeMinutes: '{{m}}m',
+    ip: 'IP',
+    settings: 'Settings for {{name}}',
   },
   addHost: {
     title: 'Add Host',
@@ -54,6 +56,16 @@ export const en = {
     copy: 'Copy',
     copied: 'Copied',
     done: 'Done',
+  },
+  hostSettings: {
+    country: 'Country override',
+    countryHint: 'Two-letter code such as JP. Leave blank to use GeoIP.',
+    invalidCountry: 'Enter a two-letter country code, or leave it blank.',
+    save: 'Save',
+    close: 'Close',
+  },
+  footer: {
+    geoip: 'IP geolocation by DB-IP',
   },
 } as const
 

@@ -43,6 +43,8 @@ export const zhCN: Translation = {
     uptimeDays: '{{d}}天{{h}}小时',
     uptimeHours: '{{h}}小时{{m}}分',
     uptimeMinutes: '{{m}}分钟',
+    ip: 'IP',
+    settings: '{{name}} 的设置',
   },
   addHost: {
     title: '添加主机',
@@ -55,5 +57,15 @@ export const zhCN: Translation = {
     copy: '复制',
     copied: '已复制',
     done: '完成',
+  },
+  hostSettings: {
+    country: '手动指定国家/地区',
+    countryHint: '两位代码，如 JP。留空则使用 GeoIP。',
+    invalidCountry: '请输入两位国家/地区代码，或留空。',
+    save: '保存',
+    close: '关闭',
+  },
+  footer: {
+    geoip: 'IP 地理位置数据由 DB-IP 提供',
   },
 }

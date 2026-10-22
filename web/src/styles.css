@@ -231,3 +231,52 @@ pre {
 .hint {
   font-size: 0.8rem;
 }
+
+.flags {
+  display: inline-flex;
+  gap: 4px;
+  margin-right: 8px;
+  vertical-align: -2px;
+}
+
+.flag {
+  display: inline-block;
+  border-radius: 2px;
+}
+
+.globe {
+  margin-right: 8px;
+  vertical-align: -2px;
+  color: var(--muted);
+}
+
+button.icon {
+  padding: 2px 10px;
+  line-height: 1.2;
+}
+
+.settings-row td {
+  background: var(--bg);
+}
+
+.settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  white-space: normal;
+}
+
+.settings input {
+  width: 6em;
+}
+
+.footer {
+  padding: 16px;
+  text-align: center;
+  font-size: 0.8rem;
+}
+
+.footer a {
+  color: inherit;
+}

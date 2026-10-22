@@ -1,6 +1,17 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { type AddedHost, addHost, ApiError, getStatus, type Host, type HostInfo, type LiveMessage, liveURL } from './api'
+import {
+  type AddedHost,
+  addHost,
+  ApiError,
+  getStatus,
+  type Host,
+  type HostInfo,
+  type LiveMessage,
+  liveURL,
+  setCountryOverride,
+} from './api'
+import { Flags } from './Flag'
 import { formatBytes, formatLoad, formatPercent, formatRate, formatUsage, unknown, uptimeParts } from './format'
 
 const reconnectDelayMs = 2000
@@ -38,7 +49,7 @@ export function StatusPage() {
       {hosts.length === 0 ? (
         <p className="muted">{t('status.empty')}</p>
       ) : (
-        <HostTable hosts={hosts} dashboardVersion={dashboardVersion} />
+        <HostTable hosts={hosts} dashboardVersion={dashboardVersion} onChanged={load} />
       )}
       <AddHost onAdded={load} />
     </section>
@@ -76,9 +87,11 @@ function useLiveUpdates(load: () => Promise<void>, onMessage: (msg: LiveMessage)
   }, [load])
 }
 
-function HostTable({ hosts, dashboardVersion }: { hosts: Host[]; dashboardVersion: string }) {
-  const { t, i18n } = useTranslation()
-  const lang = i18n.resolvedLanguage ?? 'en'
+type HostTableProps = { hosts: Host[]; dashboardVersion: string; onChanged: () => Promise<void> }
+
+function HostTable({ hosts, dashboardVersion, onChanged }: HostTableProps) {
+  const { t } = useTranslation()
+  const [openSettings, setOpenSettings] = useState<string | null>(null)
   const now = Date.now()
   return (
     <div className="table-scroll">
@@ -86,6 +99,7 @@ function HostTable({ hosts, dashboardVersion }: { hosts: Host[]; dashboardVersio
         <thead>
           <tr>
             <th scope="col">{t('status.name')}</th>
+            <th scope="col">{t('status.ip')}</th>
             <th scope="col">{t('status.system')}</th>
             <th scope="col">{t('status.uptime')}</th>
             <th scope="col">{t('status.cpu')}</th>
@@ -95,46 +109,157 @@ function HostTable({ hosts, dashboardVersion }: { hosts: Host[]; dashboardVersio
             <th scope="col">{t('status.disk')}</th>
             <th scope="col">{t('status.bandwidth')}</th>
             <th scope="col">{t('status.traffic')}</th>
+            <th scope="col">
+              <span className="visually-hidden">{t('hostSettings.save')}</span>
+            </th>
           </tr>
         </thead>
         <tbody>
-          {hosts.map((h) => {
-            const r = h.report
-            const info = h.host_info
-            return (
-              <tr key={h.id}>
-                <th scope="row">
-                  <span className="host-name">{h.name || info?.hostname || t('status.unnamed')}</span>
-                  {h.agent_outdated && (
-                    <span
-                      className="badge"
-                      title={t('status.outdatedDetail', { agent: info?.agent_version ?? unknown, dashboard: dashboardVersion })}
-                    >
-                      {t('status.outdated')}
-                    </span>
-                  )}
-                </th>
-                <td>{systemSummary(info)}</td>
-                <td>
-                  <Uptime bootTime={info?.boot_time} now={now} />
-                </td>
-                <td>{formatPercent(r?.cpu_percent, lang)}</td>
-                <td>{formatLoad([r?.load1, r?.load5, r?.load15], lang)}</td>
-                <td>{formatUsage(r?.memory_used, info?.memory_total, lang)}</td>
-                <td>{formatUsage(r?.swap_used, info?.swap_total, lang)}</td>
-                <td>{formatUsage(r?.disk_used, info?.disk_total, lang)}</td>
-                <td>
-                  <InOut inValue={formatRate(r?.rx_rate, lang)} outValue={formatRate(r?.tx_rate, lang)} />
-                </td>
-                <td>
-                  <InOut inValue={formatBytes(r?.net_rx_bytes, lang)} outValue={formatBytes(r?.net_tx_bytes, lang)} />
-                </td>
-              </tr>
-            )
-          })}
+          {hosts.map((h) => (
+            <HostRow
+              key={h.id}
+              host={h}
+              dashboardVersion={dashboardVersion}
+              now={now}
+              open={openSettings === h.id}
+              onToggle={() => setOpenSettings(openSettings === h.id ? null : h.id)}
+              onChanged={onChanged}
+            />
+          ))}
         </tbody>
       </table>
     </div>
+  )
+}
+
+type HostRowProps = {
+  host: Host
+  dashboardVersion: string
+  now: number
+  open: boolean
+  onToggle: () => void
+  onChanged: () => Promise<void>
+}
+
+const columnCount = 13
+
+function HostRow({ host: h, dashboardVersion, now, open, onToggle, onChanged }: HostRowProps) {
+  const { t, i18n } = useTranslation()
+  const lang = i18n.resolvedLanguage ?? 'en'
+  const r = h.report
+  const info = h.host_info
+  const name = h.name || info?.hostname || t('status.unnamed')
+  return (
+    <>
+      <tr>
+        <th scope="row">
+          <Flags countries={h.countries} />
+          <span className="host-name">{name}</span>
+          {h.agent_outdated && (
+            <span
+              className="badge"
+              title={t('status.outdatedDetail', { agent: info?.agent_version ?? unknown, dashboard: dashboardVersion })}
+            >
+              {t('status.outdated')}
+            </span>
+          )}
+        </th>
+        <td>
+          <span className="in-out">
+            <span>{h.ipv4 || unknown}</span>
+            <span>{h.ipv6 || unknown}</span>
+          </span>
+        </td>
+        <td>{systemSummary(info)}</td>
+        <td>
+          <Uptime bootTime={info?.boot_time} now={now} />
+        </td>
+        <td>{formatPercent(r?.cpu_percent, lang)}</td>
+        <td>{formatLoad([r?.load1, r?.load5, r?.load15], lang)}</td>
+        <td>{formatUsage(r?.memory_used, info?.memory_total, lang)}</td>
+        <td>{formatUsage(r?.swap_used, info?.swap_total, lang)}</td>
+        <td>{formatUsage(r?.disk_used, info?.disk_total, lang)}</td>
+        <td>
+          <InOut inValue={formatRate(r?.rx_rate, lang)} outValue={formatRate(r?.tx_rate, lang)} />
+        </td>
+        <td>
+          <InOut inValue={formatBytes(r?.net_rx_bytes, lang)} outValue={formatBytes(r?.net_tx_bytes, lang)} />
+        </td>
+        <td>
+          <button
+            type="button"
+            className="secondary icon"
+            aria-expanded={open}
+            aria-label={t('status.settings', { name })}
+            onClick={onToggle}
+          >
+            ⋯
+          </button>
+        </td>
+      </tr>
+      {open && (
+        <tr className="settings-row">
+          <td colSpan={columnCount}>
+            <HostSettings host={h} onClose={onToggle} onSaved={onChanged} />
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+/** HostSettings edits what the Dashboard stores about a Host; nothing is sent to its Agent. */
+type HostSettingsProps = { host: Host; onClose: () => void; onSaved: () => Promise<void> }
+
+function HostSettings({ host, onClose, onSaved }: HostSettingsProps) {
+  const { t } = useTranslation()
+  const [country, setCountry] = useState(host.country_override)
+  const [error, setError] = useState<'invalid_country' | 'error' | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      await setCountryOverride(host.id, country.trim())
+      onClose()
+      await onSaved()
+    } catch (err) {
+      setError(err instanceof ApiError && err.code === 'invalid_country' ? 'invalid_country' : 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form className="settings" onSubmit={(e) => void submit(e)}>
+      <label>
+        {t('hostSettings.country')}
+        <input
+          name="country"
+          value={country}
+          maxLength={2}
+          placeholder="GeoIP"
+          autoCapitalize="characters"
+          onChange={(e) => setCountry(e.target.value.toUpperCase())}
+        />
+        <span className="muted hint">{t('hostSettings.countryHint')}</span>
+      </label>
+      {error && (
+        <p role="alert" className="error">
+          {error === 'invalid_country' ? t('hostSettings.invalidCountry') : t('app.error')}
+        </p>
+      )}
+      <div className="row">
+        <button type="button" className="secondary" onClick={onClose}>
+          {t('hostSettings.close')}
+        </button>
+        <button type="submit" disabled={busy}>
+          {t('hostSettings.save')}
+        </button>
+      </div>
+    </form>
   )
 }
 

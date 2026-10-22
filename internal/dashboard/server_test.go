@@ -42,7 +42,7 @@ type harness struct {
 	srv     *httptest.Server
 }
 
-func newHarness(t *testing.T, app fstest.MapFS) *harness {
+func newHarness(t *testing.T, app fstest.MapFS, configure ...func(*dashboard.Options)) *harness {
 	t.Helper()
 	dataDir := t.TempDir()
 	st, err := store.Open(dataDir)
@@ -54,6 +54,9 @@ func newHarness(t *testing.T, app fstest.MapFS) *harness {
 	opts := dashboard.Options{Store: st, Now: clock.Now}
 	if app != nil {
 		opts.App = app
+	}
+	for _, f := range configure {
+		f(&opts)
 	}
 	srv := httptest.NewServer(dashboard.New(opts))
 	t.Cleanup(srv.Close)

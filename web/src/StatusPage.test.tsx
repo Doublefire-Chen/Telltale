@@ -38,11 +38,11 @@ const hostInfo: HostInfo = {
 }
 
 function host(h: Partial<Host> & Pick<Host, 'id'>): Host {
-  return { name: '', host_info: null, report: null, agent_outdated: false, ...h }
+  return { name: '', host_info: null, report: null, agent_outdated: false, countries: [], country_override: '', ...h }
 }
 
 function row(name: string) {
-  return screen.getByRole('rowheader', { name: new RegExp(`^${name}`) }).closest('tr')!
+  return screen.getByRole('rowheader', { name: new RegExp(name) }).closest('tr')!
 }
 
 function cells(name: string) {
@@ -63,20 +63,33 @@ describe('Status page', () => {
   it('shows "—" for everything before a Host has reported', async () => {
     stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'new-box' })] })
     render(<App />)
-    await screen.findByRole('rowheader', { name: 'new-box' })
-    // System, Uptime, CPU, load, memory, swap, disk, and in/out for Bandwidth and Traffic.
-    expect(within(row('new-box')).getAllByText(/—/)).toHaveLength(11)
+    await screen.findByRole('rowheader', { name: /new-box/ })
+    // IPv4/IPv6, System, Uptime, CPU, load, memory, swap, disk, and in/out for Bandwidth and Traffic.
+    expect(within(row('new-box')).getAllByText(/^—$|—$/)).toHaveLength(13)
+    // No country yet: a neutral globe instead of a flag.
+    expect(within(row('new-box')).getByRole('img', { name: '—' })).toBeTruthy()
   })
 
   it('shows every metric, using Host Info for totals, system and Uptime', async () => {
     stubDashboard({
       authenticated: true,
-      hosts: [host({ id: 'h1', name: 'tokyo', host_info: hostInfo, report: fullReport })],
+      hosts: [
+        host({
+          id: 'h1',
+          name: 'tokyo',
+          host_info: hostInfo,
+          report: fullReport,
+          ipv4: '203.0.113.7',
+          ipv6: '2001:db8::7',
+          countries: ['JP'],
+        }),
+      ],
     })
     render(<App />)
-    await screen.findByRole('rowheader', { name: 'tokyo' })
+    await screen.findByRole('rowheader', { name: /tokyo/ })
 
-    expect(cells('tokyo')).toEqual([
+    expect(cells('tokyo').slice(0, -1)).toEqual([
+      '203.0.113.72001:db8::7',
       'ubuntu 24.04 · x86_64 · kvm',
       '3d 4h',
       '37.5%',
@@ -95,8 +108,8 @@ describe('Status page', () => {
       hosts: [host({ id: 'h1', host_info: hostInfo }), host({ id: 'h2' })],
     })
     render(<App />)
-    expect(await screen.findByRole('rowheader', { name: 'vps-tokyo' })).toBeTruthy()
-    expect(screen.getByRole('rowheader', { name: 'Unnamed Host' })).toBeTruthy()
+    expect(await screen.findByRole('rowheader', { name: /vps-tokyo/ })).toBeTruthy()
+    expect(screen.getByRole('rowheader', { name: /Unnamed Host/ })).toBeTruthy()
   })
 
   it('flags Hosts whose Agent is older than the Dashboard', async () => {
@@ -108,7 +121,7 @@ describe('Status page', () => {
       ],
     })
     render(<App />)
-    await screen.findByRole('rowheader', { name: /^old/ })
+    await screen.findByRole('rowheader', { name: /old/ })
 
     const badge = within(row('old')).getByText('Agent outdated')
     expect(badge.getAttribute('title')).toBe('Agent v1.1.0 is older than Dashboard v1.2.0. Upgrade it on the Host.')
@@ -124,9 +137,47 @@ describe('Status page', () => {
       ],
     })
     render(<App />)
-    await screen.findByRole('rowheader', { name: 'hours' })
-    expect(cells('hours')[1]).toBe('2h 7m')
-    expect(cells('minutes')[1]).toBe('9m')
+    await screen.findByRole('rowheader', { name: /hours/ })
+    expect(cells('hours')[2]).toBe('2h 7m')
+    expect(cells('minutes')[2]).toBe('9m')
+  })
+
+  it('shows SVG flags: one per country, with the ISO code as alt text', async () => {
+    stubDashboard({
+      authenticated: true,
+      hosts: [
+        host({ id: 'h1', name: 'one', countries: ['JP'] }),
+        host({ id: 'h2', name: 'two', countries: ['US', 'DE'] }),
+      ],
+    })
+    render(<App />)
+    await screen.findByRole('rowheader', { name: /one/ })
+
+    const jp = within(row('one')).getByRole('img', { name: 'JP' })
+    expect(jp.tagName).toBe('IMG')
+    expect(jp.getAttribute('src')).toMatch(/jp\.svg/)
+    expect(jp.getAttribute('title')).toBe('JP')
+    expect(within(row('two')).getAllByRole('img').map((i) => i.getAttribute('alt'))).toEqual(['US', 'DE'])
+  })
+
+  it('sets and clears a country override from the Host settings', async () => {
+    vi.useRealTimers()
+    const user = userEvent.setup()
+    const dash = stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'anycast', countries: ['AU'] })] })
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Settings for anycast' }))
+    const input = screen.getByLabelText(/Country override/)
+    await user.type(input, 'jp')
+    expect((input as HTMLInputElement).value).toBe('JP')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(dash.countryRequests).toEqual([{ id: 'h1', country: 'JP' }])
+    expect(await within(row('anycast')).findByRole('img', { name: 'JP' })).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Settings for anycast' }))
+    await user.clear(screen.getByLabelText(/Country override/))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(dash.countryRequests.at(-1)).toEqual({ id: 'h1', country: '' })
   })
 
   it('updates live from the WebSocket without reloading', async () => {
@@ -152,7 +203,7 @@ describe('Status page', () => {
     expect(await screen.findByRole('heading', { name: 'Host “Tokyo-Vultr” added' })).toBeTruthy()
     const config = screen.getByText(/token = "tt_A+"/)
     expect(config.textContent).toContain(`dashboard_url = "${location.origin}"`)
-    expect(await screen.findByRole('rowheader', { name: 'Tokyo-Vultr' })).toBeTruthy()
+    expect(await screen.findByRole('rowheader', { name: /Tokyo-Vultr/ })).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Done' }))
     expect(screen.queryByText(/tt_A+/)).toBeNull()
@@ -174,6 +225,6 @@ describe('Status page', () => {
     render(<App />)
     expect(await screen.findByRole('columnheader', { name: '内存' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: '添加主机' })).toBeTruthy()
-    expect(cells('tokyo')[1]).toBe('3天4小时')
+    expect(cells('tokyo')[2]).toBe('3天4小时')
   })
 })

@@ -13,13 +13,14 @@ import (
 	"io/fs"
 	"log/slog"
 	"mime"
-	"net"
 	"net/http"
+	"net/netip"
 	"path"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Doublefire-Chen/Telltale/internal/dashboard/geoip"
 	"github.com/Doublefire-Chen/Telltale/internal/dashboard/store"
 	v1 "github.com/Doublefire-Chen/Telltale/internal/protocol/v1"
 	"github.com/Doublefire-Chen/Telltale/internal/version"
@@ -48,19 +49,26 @@ type Options struct {
 	Logger *slog.Logger
 	// Version is this Dashboard's release version; defaults to version.Version.
 	Version string
+	// TrustedProxies are the reverse proxies whose forwarded-for headers are
+	// believed; nil means DefaultTrustedProxies.
+	TrustedProxies []netip.Prefix
+	// GeoIP resolves countries; nil leaves them unknown.
+	GeoIP *geoip.DB
 }
 
 // Server is the Dashboard's HTTP handler.
 type Server struct {
-	store   *store.Store
-	app     fs.FS
-	version string
-	now     func() time.Time
-	logger  *slog.Logger
-	logins  *failureLimiter
-	latest  latestReports
-	hub     hub
-	mux     *http.ServeMux
+	store          *store.Store
+	app            fs.FS
+	version        string
+	trustedProxies []netip.Prefix
+	geoip          *geoip.DB
+	now            func() time.Time
+	logger         *slog.Logger
+	logins         *failureLimiter
+	latest         latestReports
+	hub            hub
+	mux            *http.ServeMux
 }
 
 // New builds a Server from opts.
@@ -83,6 +91,11 @@ func New(opts Options) *Server {
 	if s.version == "" {
 		s.version = version.Version
 	}
+	s.trustedProxies = opts.TrustedProxies
+	if s.trustedProxies == nil {
+		s.trustedProxies = DefaultTrustedProxies
+	}
+	s.geoip = opts.GeoIP
 
 	s.mux.HandleFunc("GET /api/session", s.handleGetSession)
 	s.mux.Handle("POST /api/session", s.requireSetup(http.HandlerFunc(s.handleLogin)))
@@ -90,6 +103,7 @@ func New(opts Options) *Server {
 	s.mux.Handle("GET /api/status", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleStatus))))
 	s.mux.Handle("GET /api/live", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleLive))))
 	s.mux.Handle("POST /api/hosts", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleAddHost))))
+	s.mux.Handle("PUT /api/hosts/{id}/country", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleSetCountry))))
 	s.mux.HandleFunc("POST "+v1.ReportPath, s.handleReport)
 	s.mux.HandleFunc("POST "+v1.HostInfoPath, s.handleHostInfo)
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
@@ -183,8 +197,7 @@ type loginRequest struct {
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
-	// Until trusted proxies are configurable, the rate-limit key is the direct peer.
-	key := remoteHost(r)
+	key := s.clientIP(r).String()
 	now := s.now()
 	if blocked, wait := s.logins.blocked(key, now); blocked {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Round(time.Second).Seconds())))
@@ -332,12 +345,4 @@ func newToken() (string, error) {
 func hashToken(token string) []byte {
 	sum := sha256.Sum256([]byte(token))
 	return sum[:]
-}
-
-func remoteHost(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

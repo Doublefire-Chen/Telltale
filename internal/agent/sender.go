@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -47,12 +48,22 @@ type Sender struct {
 	// lastStatus is the previous Report's outcome (-1 before the first send).
 	lastStatus int
 
-	// Host Info state: the last version the Dashboard accepted and when, the
-	// version waiting to be sent (nil if none), and when Host Info was last read.
-	deliveredInfo   []byte
-	deliveredInfoAt time.Time
-	pendingInfo     []byte
-	infoCheckedAt   time.Time
+	// infoChannels send Host Info once over IPv4 and once over IPv6, so the
+	// Dashboard learns both of the Host's addresses (ADR 0004).
+	infoChannels  []*infoChannel
+	infoCheckedAt time.Time
+}
+
+// infoChannel is Host Info delivery over one IP family.
+type infoChannel struct {
+	family string // "tcp4" or "tcp6"
+	client *http.Client
+	// delivered is the last Host Info the Dashboard accepted, at deliveredAt;
+	// pending is Host Info waiting to be sent (nil if none), not before retryAt.
+	delivered   []byte
+	deliveredAt time.Time
+	pending     []byte
+	retryAt     time.Time
 }
 
 // NewSender builds a Sender for cfg. version is sent as the Agent's release version.
@@ -66,14 +77,18 @@ func newSender(dashboardURL, token string, interval time.Duration, version strin
 	}
 	base := strings.TrimSuffix(dashboardURL, "/")
 	return &Sender{
-		reportURL:       base + v1.ReportPath,
-		hostInfoURL:     base + v1.HostInfoPath,
-		token:           token,
-		interval:        interval,
-		version:         version,
-		collector:       collector,
-		logger:          logger,
-		client:          newClient(rootCAs),
+		reportURL:   base + v1.ReportPath,
+		hostInfoURL: base + v1.HostInfoPath,
+		token:       token,
+		interval:    interval,
+		version:     version,
+		collector:   collector,
+		logger:      logger,
+		client:      newClient(rootCAs, "tcp"),
+		infoChannels: []*infoChannel{
+			{family: "tcp4", client: newClient(rootCAs, "tcp4")},
+			{family: "tcp6", client: newClient(rootCAs, "tcp6")},
+		},
 		now:             time.Now,
 		hostInfoCheck:   hostInfoCheckEvery,
 		hostInfoRefresh: hostInfoRefreshEvery,
@@ -82,10 +97,15 @@ func newSender(dashboardURL, token string, interval time.Duration, version strin
 }
 
 // newClient returns an HTTP client that talks only to the Dashboard: it
-// prefers HTTP/2, never follows redirects, and keeps no cookies.
-func newClient(rootCAs *x509.CertPool) *http.Client {
+// prefers HTTP/2, never follows redirects, and keeps no cookies. network is
+// "tcp", or "tcp4"/"tcp6" to force one IP family.
+func newClient(rootCAs *x509.CertPool, network string) *http.Client {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.ForceAttemptHTTP2 = true
+	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+	tr.DialContext = func(ctx context.Context, _, addr string) (net.Conn, error) {
+		return dialer.DialContext(ctx, network, addr)
+	}
 	if rootCAs != nil {
 		tr.TLSClientConfig = &tls.Config{RootCAs: rootCAs}
 	}
@@ -118,7 +138,8 @@ func (s *Sender) Run(ctx context.Context) {
 	}
 }
 
-// checkHostInfo reads Host Info and queues it if it changed or a refresh is due.
+// checkHostInfo reads Host Info and queues it on each IP family where it
+// changed or a refresh is due.
 func (s *Sender) checkHostInfo(ctx context.Context) {
 	now := s.now()
 	s.infoCheckedAt = now
@@ -129,18 +150,28 @@ func (s *Sender) checkHostInfo(ctx context.Context) {
 		s.logger.Error("encode Host Info", "err", err)
 		return
 	}
-	if !bytes.Equal(body, s.deliveredInfo) || now.Sub(s.deliveredInfoAt) >= s.hostInfoRefresh {
-		s.pendingInfo = body
+	for _, ch := range s.infoChannels {
+		if !bytes.Equal(body, ch.delivered) || now.Sub(ch.deliveredAt) >= s.hostInfoRefresh {
+			ch.pending = body
+		}
 	}
 }
 
-// sendHostInfo sends queued Host Info; it stays queued until the Dashboard accepts it.
+// sendHostInfo sends queued Host Info on each IP family. It stays queued until
+// the Dashboard accepts it. If a family cannot connect at all (no IPv6 route,
+// say), it is retried at the next check rather than every interval.
 func (s *Sender) sendHostInfo(ctx context.Context) {
-	if s.pendingInfo == nil {
-		return
-	}
-	if status := s.post(ctx, s.hostInfoURL, s.pendingInfo); status >= 200 && status < 300 {
-		s.deliveredInfo, s.deliveredInfoAt, s.pendingInfo = s.pendingInfo, s.now(), nil
+	now := s.now()
+	for _, ch := range s.infoChannels {
+		if ch.pending == nil || now.Before(ch.retryAt) {
+			continue
+		}
+		switch status := s.postWith(ctx, ch.client, s.hostInfoURL, ch.pending); {
+		case status >= 200 && status < 300:
+			ch.delivered, ch.deliveredAt, ch.pending = ch.pending, now, nil
+		case status == 0:
+			ch.retryAt = now.Add(s.hostInfoCheck)
+		}
 	}
 }
 
@@ -153,12 +184,12 @@ func (s *Sender) sendReport(ctx context.Context) {
 		s.logger.Error("encode Report", "err", err)
 		return
 	}
-	s.observe(s.post(ctx, s.reportURL, body))
+	s.observe(s.postWith(ctx, s.client, s.reportURL, body))
 }
 
-// post sends one request body and returns the response status code, or 0 if
-// no response arrived. The status code is the only thing read from the response.
-func (s *Sender) post(ctx context.Context, url string, body []byte) int {
+// postWith sends one request body and returns the response status code, or 0
+// if no response arrived. The status code is the only thing read from the response.
+func (s *Sender) postWith(ctx context.Context, client *http.Client, url string, body []byte) int {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		s.logger.Error("build request", "err", err)
@@ -166,7 +197,7 @@ func (s *Sender) post(ctx context.Context, url string, body []byte) int {
 	}
 	req.Header.Set("Authorization", "Bearer "+s.token)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := s.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() == nil {
 			s.logger.Debug("send to Dashboard", "url", url, "err", err)
