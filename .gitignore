@@ -1,0 +1,7 @@
+# Web app build output (embedded into the Dashboard at build time)
+/web/dist/*
+!/web/dist/.gitkeep
+/web/node_modules/
+
+# Go build output
+/bin/
