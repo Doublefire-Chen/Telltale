@@ -6,6 +6,7 @@ export type FakeDashboardOptions = {
   password?: string
   loginError?: 'rate_limited'
   authenticated?: boolean
+  statusPublic?: boolean
   hosts?: Host[]
 }
 
@@ -38,6 +39,7 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
     setupRequired: opts.setupRequired ?? false,
     password: opts.password ?? 'correct horse battery',
     authenticated: opts.authenticated ?? false,
+    statusPublic: opts.statusPublic ?? false,
     hosts: opts.hosts ?? [],
     requests: [] as { method: string; path: string; body: Record<string, unknown> }[],
   }
@@ -52,7 +54,11 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
       const method = init?.method ?? 'GET'
       const body = init?.body ? JSON.parse(String(init.body)) : undefined
       if (path === '/api/session' && method === 'GET') {
-        return json(200, { setup_required: state.setupRequired, authenticated: state.authenticated })
+        return json(200, {
+          setup_required: state.setupRequired,
+          authenticated: state.authenticated,
+          status_public: state.statusPublic,
+        })
       }
       if (path === '/api/session' && method === 'POST') {
         if (opts.loginError) return json(429, { error: opts.loginError })
@@ -66,8 +72,16 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
         state.authenticated = false
         return new Response(null, { status: 204 })
       }
+      if (path === '/api/status' && (state.authenticated || state.statusPublic)) {
+        return json(200, { dashboard_version: 'v1.2.0', hosts: state.hosts })
+      }
       if (!state.authenticated) return json(401, { error: 'unauthenticated' })
-      if (path === '/api/status') return json(200, { dashboard_version: 'v1.2.0', hosts: state.hosts })
+      if (path === '/api/settings' && method === 'GET') return json(200, { status_public: state.statusPublic })
+      if (path === '/api/settings' && method === 'PUT') {
+        state.statusPublic = body.status_public
+        state.requests.push({ method, path, body })
+        return new Response(null, { status: 204 })
+      }
       if (path === '/api/hosts' && method === 'POST') {
         const name = String(body.name).trim()
         if (name.length > 64) return json(400, { error: 'invalid_name' })

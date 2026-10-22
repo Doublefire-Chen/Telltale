@@ -62,7 +62,14 @@ type statusResponse struct {
 }
 
 // handleStatus serves the Status page: every Host with its latest Report.
+// Anonymous viewers of a public Status page get no Hidden Hosts, IP addresses
+// or Dashboard-side settings; the filtering happens here, not in the browser.
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	admin, err := s.authenticated(r)
+	if err != nil {
+		s.internalError(w, err)
+		return
+	}
 	hosts, err := s.store.Hosts(r.Context())
 	if err != nil {
 		s.internalError(w, err)
@@ -70,6 +77,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := statusResponse{DashboardVersion: s.version, Hosts: make([]hostView, 0, len(hosts))}
 	for _, h := range hosts {
+		if h.Hidden && !admin {
+			continue
+		}
 		v := hostView{ID: h.ID, Name: h.Name, Group: h.Group, Hidden: h.Hidden}
 		if h.HostInfo != nil {
 			var info v1.HostInfo
@@ -83,6 +93,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			v.Online = online(rep, s.now())
 		}
 		s.addAddresses(&v, h)
+		if !admin {
+			v.IPv4, v.IPv6, v.CountryOverride = "", "", ""
+		}
 		resp.Hosts = append(resp.Hosts, v)
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -127,7 +140,7 @@ func (s *Server) handleAddHost(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, err)
 		return
 	}
-	s.hub.publish(liveMessage{Type: "hosts_changed"})
+	s.hostsChanged()
 	writeJSON(w, http.StatusCreated, addHostResponse{ID: id, Name: name, Token: token})
 }
 
@@ -220,7 +233,7 @@ func (s *Server) handleUpdateHost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 		return
 	}
-	s.hub.publish(liveMessage{Type: "hosts_changed"})
+	s.hostsChanged()
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -241,7 +254,7 @@ func (s *Server) handleSetOrder(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, err)
 		return
 	}
-	s.hub.publish(liveMessage{Type: "hosts_changed"})
+	s.hostsChanged()
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -283,10 +296,40 @@ func (s *Server) handleDeleteHost(w http.ResponseWriter, r *http.Request) {
 	}
 	s.latest.delete(id)
 	s.markOnline(id)
-	s.hub.publish(liveMessage{Type: "hosts_changed"})
+	s.hostsChanged()
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func isCountryCode(c string) bool {
 	return len(c) == 2 && c[0] >= 'A' && c[0] <= 'Z' && c[1] >= 'A' && c[1] <= 'Z'
+}
+
+type settingsBody struct {
+	StatusPublic bool `json:"status_public"`
+}
+
+func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
+	public, err := s.store.StatusPublic(r.Context())
+	if err != nil {
+		s.internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, settingsBody{StatusPublic: public})
+}
+
+// handleSetSettings changes Dashboard settings. Making the Status page private
+// disconnects every anonymous viewer at once.
+func (s *Server) handleSetSettings(w http.ResponseWriter, r *http.Request) {
+	var req settingsBody
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := s.store.SetStatusPublic(r.Context(), req.StatusPublic); err != nil {
+		s.internalError(w, err)
+		return
+	}
+	if !req.StatusPublic {
+		s.hub.dropAnonymous()
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

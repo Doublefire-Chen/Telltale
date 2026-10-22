@@ -81,6 +81,10 @@ type Server struct {
 	hub           hub
 	mux           *http.ServeMux
 
+	// hidden caches the IDs of Hidden Hosts (nil: reload); guarded by hiddenMu.
+	hiddenMu sync.Mutex
+	hidden   map[string]bool
+
 	sweepEvery time.Duration
 	// offline holds the Hosts last announced as Offline; guarded by offlineMu.
 	offlineMu sync.Mutex
@@ -122,8 +126,10 @@ func New(opts Options) *Server {
 	s.mux.HandleFunc("GET /api/session", s.handleGetSession)
 	s.mux.Handle("POST /api/session", s.requireSetup(http.HandlerFunc(s.handleLogin)))
 	s.mux.Handle("DELETE /api/session", s.requireSetup(http.HandlerFunc(s.handleLogout)))
-	s.mux.Handle("GET /api/status", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleStatus))))
-	s.mux.Handle("GET /api/live", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleLive))))
+	s.mux.Handle("GET /api/status", s.requireSetup(s.requireViewer(http.HandlerFunc(s.handleStatus))))
+	s.mux.Handle("GET /api/live", s.requireSetup(s.requireViewer(http.HandlerFunc(s.handleLive))))
+	s.mux.Handle("GET /api/settings", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleGetSettings))))
+	s.mux.Handle("PUT /api/settings", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleSetSettings))))
 	s.mux.Handle("POST /api/hosts", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleAddHost))))
 	s.mux.Handle("PATCH /api/hosts/{id}", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleUpdateHost))))
 	s.mux.Handle("DELETE /api/hosts/{id}", s.requireSetup(s.requireAdmin(http.HandlerFunc(s.handleDeleteHost))))
@@ -167,7 +173,7 @@ func (s *Server) sweepOffline() {
 	})
 	s.offlineMu.Unlock()
 	for _, id := range newlyOffline {
-		s.hub.publish(liveMessage{Type: "offline", HostID: id})
+		s.publishHost(liveMessage{Type: "offline", HostID: id})
 	}
 }
 
@@ -227,6 +233,36 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	})
 }
 
+// requireViewer lets through the admin, and anyone else while the Status page is public.
+func (s *Server) requireViewer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		admin, err := s.authenticated(r)
+		if err != nil {
+			s.internalError(w, err)
+			return
+		}
+		ok, err := s.mayView(r, admin)
+		if err != nil {
+			s.internalError(w, err)
+			return
+		}
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "unauthenticated")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// mayView reports whether a request may see the Status page: an admin needs a
+// valid session, anyone else needs the Status page to be public.
+func (s *Server) mayView(r *http.Request, admin bool) (bool, error) {
+	if admin {
+		return s.authenticated(r)
+	}
+	return s.store.StatusPublic(r.Context())
+}
+
 func (s *Server) authenticated(r *http.Request) (bool, error) {
 	c, err := r.Cookie(sessionCookie)
 	if err != nil || c.Value == "" {
@@ -238,6 +274,8 @@ func (s *Server) authenticated(r *http.Request) (bool, error) {
 type sessionState struct {
 	SetupRequired bool `json:"setup_required"`
 	Authenticated bool `json:"authenticated"`
+	// StatusPublic tells the web app it may show the Status page without login.
+	StatusPublic bool `json:"status_public"`
 }
 
 func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
@@ -249,6 +287,10 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 	state := sessionState{SetupRequired: required}
 	if !required {
 		if state.Authenticated, err = s.authenticated(r); err != nil {
+			s.internalError(w, err)
+			return
+		}
+		if state.StatusPublic, err = s.store.StatusPublic(r.Context()); err != nil {
 			s.internalError(w, err)
 			return
 		}

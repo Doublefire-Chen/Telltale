@@ -20,6 +20,8 @@ export const zhCN: Translation = {
     submit: '登录',
     invalid: '用户名或密码错误。',
     rateLimited: '失败次数过多，请稍后再试。',
+    open: '登录',
+    back: '返回状态页',
   },
   status: {
     title: '主机',
@@ -82,6 +84,12 @@ export const zhCN: Translation = {
     deleteConfirm: '删除 {{name}} 及其所有数据？此操作无法撤销。',
     deleteConfirmButton: '永久删除',
     cancel: '取消',
+  },
+  dashboardSettings: {
+    title: 'Dashboard 设置',
+    public: '公开状态页',
+    publicHint: '任何拿到链接的人都能看到主机、国旗和监控数据。IP 地址和已隐藏的主机永远不会公开。',
+    saved: '已保存',
   },
   footer: {
     geoip: 'IP 地理位置数据由 DB-IP 提供',

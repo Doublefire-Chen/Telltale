@@ -22,7 +22,13 @@ export function App() {
     void refresh()
   }, [refresh])
 
-  const authenticated = view.kind === 'ready' && view.session.authenticated
+  // On a public Status page, anonymous visitors see it read-only and can
+  // choose to open the login form.
+  const [wantsLogin, setWantsLogin] = useState(false)
+  const session = view.kind === 'ready' ? view.session : null
+  const authenticated = session?.authenticated ?? false
+  const publicView = !!session && !session.setup_required && !authenticated && session.status_public && !wantsLogin
+  const loginView = !!session && !session.setup_required && !authenticated && !publicView
 
   return (
     <>
@@ -35,14 +41,31 @@ export function App() {
               {t('status.logout')}
             </button>
           )}
+          {publicView && (
+            <button type="button" className="secondary" onClick={() => setWantsLogin(true)}>
+              {t('login.open')}
+            </button>
+          )}
+          {loginView && session?.status_public && (
+            <button type="button" className="secondary" onClick={() => setWantsLogin(false)}>
+              {t('login.back')}
+            </button>
+          )}
         </div>
       </header>
       <main className="main">
         {view.kind === 'loading' && <p>{t('app.loading')}</p>}
         {view.kind === 'error' && <p role="alert">{t('app.error')}</p>}
         {view.kind === 'ready' && view.session.setup_required && <SetupRequired />}
-        {view.kind === 'ready' && !view.session.setup_required && !authenticated && <Login onLoggedIn={refresh} />}
-        {authenticated && <StatusPage />}
+        {loginView && (
+          <Login
+            onLoggedIn={async () => {
+              setWantsLogin(false)
+              await refresh()
+            }}
+          />
+        )}
+        {(authenticated || publicView) && <StatusPage key={String(authenticated)} admin={authenticated} onUnauthorized={refresh} />}
       </main>
       <footer className="footer muted">
         <a href="https://db-ip.com" target="_blank" rel="noreferrer">

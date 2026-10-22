@@ -74,7 +74,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	view := withBandwidth(reportView{ReceivedAt: s.now().UnixMilli(), Report: rep}, prev, havePrev)
 	s.latest.set(host.ID, view)
 	s.markOnline(host.ID)
-	s.hub.publish(liveMessage{Type: "report", HostID: host.ID, Report: &view})
+	s.publishHost(liveMessage{Type: "report", HostID: host.ID, Report: &view})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -100,7 +100,7 @@ func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	s.hub.publish(liveMessage{Type: "hosts_changed"})
+	s.hostsChanged()
 	w.WriteHeader(http.StatusNoContent)
 }
 

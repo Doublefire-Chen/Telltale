@@ -4,6 +4,8 @@
 export type Session = {
   setup_required: boolean
   authenticated: boolean
+  /** The Status page may be shown without logging in. */
+  status_public: boolean
 }
 
 export type LoginResult = 'ok' | 'invalid_credentials' | 'rate_limited'
@@ -164,4 +166,16 @@ export async function regenerateToken(id: string): Promise<string> {
 
 export async function deleteHost(id: string): Promise<void> {
   await request('DELETE', hostPath(id))
+}
+
+export type Settings = {
+  status_public: boolean
+}
+
+export async function getSettings(): Promise<Settings> {
+  return (await request('GET', '/api/settings')).json()
+}
+
+export async function saveSettings(settings: Settings): Promise<void> {
+  await request('PUT', '/api/settings', settings)
 }

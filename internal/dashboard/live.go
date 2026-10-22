@@ -113,49 +113,114 @@ type liveMessage struct {
 // behind is dropped; its browser reconnects and refetches the full state.
 type hub struct {
 	mu   sync.Mutex
-	subs map[chan []byte]struct{}
+	subs map[*subscriber]struct{}
 }
 
-func (h *hub) subscribe() chan []byte {
+// subscriber is one connected browser: the admin, or an anonymous viewer of
+// the public Status page, who must not learn anything about Hidden Hosts.
+type subscriber struct {
+	ch    chan []byte
+	admin bool
+}
+
+func (h *hub) subscribe(admin bool) *subscriber {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.subs == nil {
-		h.subs = make(map[chan []byte]struct{})
+		h.subs = make(map[*subscriber]struct{})
 	}
-	ch := make(chan []byte, liveSubscriberBuffer)
-	h.subs[ch] = struct{}{}
-	return ch
+	sub := &subscriber{ch: make(chan []byte, liveSubscriberBuffer), admin: admin}
+	h.subs[sub] = struct{}{}
+	return sub
 }
 
-func (h *hub) unsubscribe(ch chan []byte) {
+func (h *hub) unsubscribe(sub *subscriber) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if _, ok := h.subs[ch]; ok {
-		delete(h.subs, ch)
-		close(ch)
+	h.drop(sub)
+}
+
+// drop removes sub and closes its channel; the caller must hold h.mu.
+func (h *hub) drop(sub *subscriber) {
+	if _, ok := h.subs[sub]; ok {
+		delete(h.subs, sub)
+		close(sub.ch)
 	}
 }
 
-func (h *hub) publish(msg liveMessage) {
+// publish sends msg to the admin, and to anonymous viewers if public is set.
+func (h *hub) publish(msg liveMessage, public bool) {
 	b, err := json.Marshal(msg)
 	if err != nil {
 		return
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for ch := range h.subs {
+	for sub := range h.subs {
+		if !sub.admin && !public {
+			continue
+		}
 		select {
-		case ch <- b:
+		case sub.ch <- b:
 		default:
-			delete(h.subs, ch)
-			close(ch)
+			h.drop(sub)
 		}
 	}
 }
 
-// handleLive streams live messages to a logged-in browser until it disconnects
-// or its session ends.
+// dropAnonymous disconnects every anonymous viewer, e.g. when the Status page
+// stops being public.
+func (h *hub) dropAnonymous() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for sub := range h.subs {
+		if !sub.admin {
+			h.drop(sub)
+		}
+	}
+}
+
+// publishHost sends a message about one Host, withholding it from anonymous
+// viewers if the Host is Hidden.
+func (s *Server) publishHost(msg liveMessage) {
+	hidden, err := s.isHidden(msg.HostID)
+	if err != nil {
+		s.logger.Error("look up Hidden Hosts", "err", err)
+		hidden = true
+	}
+	s.hub.publish(msg, !hidden)
+}
+
+// hostsChanged tells every viewer to refetch the Host list, and refreshes the
+// cache of Hidden Hosts.
+func (s *Server) hostsChanged() {
+	s.hiddenMu.Lock()
+	s.hidden = nil
+	s.hiddenMu.Unlock()
+	s.hub.publish(liveMessage{Type: "hosts_changed"}, true)
+}
+
+func (s *Server) isHidden(hostID string) (bool, error) {
+	s.hiddenMu.Lock()
+	defer s.hiddenMu.Unlock()
+	if s.hidden == nil {
+		ids, err := s.store.HiddenHostIDs(context.Background())
+		if err != nil {
+			return false, err
+		}
+		s.hidden = ids
+	}
+	return s.hidden[hostID], nil
+}
+
+// handleLive streams live messages to a viewer until it disconnects or may no
+// longer view: the admin's session ended, or the Status page went private.
 func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
+	admin, err := s.authenticated(r)
+	if err != nil {
+		s.internalError(w, err)
+		return
+	}
 	// Accept rejects cross-origin upgrades by default.
 	c, err := websocket.Accept(w, r, nil)
 	if err != nil {
@@ -163,8 +228,9 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 	}
 	defer c.CloseNow()
 
-	ch := s.hub.subscribe()
-	defer s.hub.unsubscribe(ch)
+	sub := s.hub.subscribe(admin)
+	defer s.hub.unsubscribe(sub)
+	ch := sub.ch
 	ctx := c.CloseRead(r.Context())
 	ticker := time.NewTicker(livePingInterval)
 	defer ticker.Stop()
@@ -175,15 +241,17 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 			return
 		case msg, ok := <-ch:
 			if !ok {
-				c.Close(websocket.StatusTryAgainLater, "fell behind")
+				// Dropped: it fell behind, or may no longer view. Either way
+				// the browser reconnects and refetches (or is refused).
+				c.Close(websocket.StatusTryAgainLater, "reconnect")
 				return
 			}
 			if err := s.writeLive(ctx, c, msg); err != nil {
 				return
 			}
 		case <-ticker.C:
-			if ok, err := s.authenticated(r); err != nil || !ok {
-				c.Close(websocket.StatusPolicyViolation, "session ended")
+			if ok, err := s.mayView(r, admin); err != nil || !ok {
+				c.Close(websocket.StatusPolicyViolation, "no longer allowed")
 				return
 			}
 			pingCtx, cancel := context.WithTimeout(ctx, liveWriteTimeout)

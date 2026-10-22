@@ -18,7 +18,10 @@ import (
 // DBFile is the database file name inside the data directory.
 const DBFile = "telltale.db"
 
-const settingAdminPasswordHash = "admin_password_hash"
+const (
+	settingAdminPasswordHash = "admin_password_hash"
+	settingStatusPublic      = "status_public"
+)
 
 // migrations are applied in order; the database's user_version records how many have run.
 var migrations = []string{
@@ -133,6 +136,48 @@ func (s *Store) SetAdminPasswordHash(ctx context.Context, hash string) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// StatusPublic reports whether the Status page is public. It is private
+// until the admin makes it public.
+func (s *Store) StatusPublic(ctx context.Context) (bool, error) {
+	var v string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, settingStatusPublic).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return v == "true", err
+}
+
+// SetStatusPublic makes the Status page public or private.
+func (s *Store) SetStatusPublic(ctx context.Context, public bool) error {
+	v := "false"
+	if public {
+		v = "true"
+	}
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO settings (key, value) VALUES (?, ?)
+		 ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+		settingStatusPublic, v)
+	return err
+}
+
+// HiddenHostIDs returns the IDs of Hidden Hosts.
+func (s *Store) HiddenHostIDs(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM hosts WHERE hidden`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids[id] = true
+	}
+	return ids, rows.Err()
 }
 
 // CreateSession records a session by the hash of its token.

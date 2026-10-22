@@ -19,6 +19,8 @@ export const en = {
     submit: 'Log in',
     invalid: 'Wrong username or password.',
     rateLimited: 'Too many failed attempts. Try again later.',
+    open: 'Log in',
+    back: 'Back to the Status page',
   },
   status: {
     title: 'Hosts',
@@ -81,6 +83,12 @@ export const en = {
     deleteConfirm: 'Delete {{name}} and everything stored about it? This cannot be undone.',
     deleteConfirmButton: 'Delete permanently',
     cancel: 'Cancel',
+  },
+  dashboardSettings: {
+    title: 'Dashboard settings',
+    public: 'Make the Status page public',
+    publicHint: 'Anyone with the link can see Hosts, flags and metrics. IP addresses and Hidden Hosts are never shown publicly.',
+    saved: 'Saved',
   },
   footer: {
     geoip: 'IP geolocation by DB-IP',
