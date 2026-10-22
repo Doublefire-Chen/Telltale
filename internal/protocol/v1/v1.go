@@ -32,6 +32,20 @@ type Report struct {
 	CPUPercent *float64 `json:"cpu_percent,omitempty"`
 	// MemoryUsed is memory in use, in bytes.
 	MemoryUsed *uint64 `json:"memory_used,omitempty"`
+	// SwapUsed is swap in use, in bytes.
+	SwapUsed *uint64 `json:"swap_used,omitempty"`
+	// Load1, Load5 and Load15 are the 1-, 5- and 15-minute load averages.
+	// Agents send them only on systems that have them (Linux, macOS).
+	Load1  *float64 `json:"load1,omitempty"`
+	Load5  *float64 `json:"load5,omitempty"`
+	Load15 *float64 `json:"load15,omitempty"`
+	// DiskUsed is space in use, in bytes, summed over real local filesystems
+	// (no tmpfs, overlay or network filesystems), each device counted once.
+	DiskUsed *uint64 `json:"disk_used,omitempty"`
+	// NetRxBytes and NetTxBytes are bytes received and sent since boot,
+	// summed over the network interfaces the Agent is configured to count.
+	NetRxBytes *uint64 `json:"net_rx_bytes,omitempty"`
+	NetTxBytes *uint64 `json:"net_tx_bytes,omitempty"`
 }
 
 // HostInfo is the static description of a Host. Its fields arrive in a later slice.

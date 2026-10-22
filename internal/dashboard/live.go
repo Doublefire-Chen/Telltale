@@ -23,6 +23,35 @@ type reportView struct {
 	// ReceivedAt is when the Dashboard received the Report, in Unix milliseconds.
 	ReceivedAt int64 `json:"received_at"`
 	v1.Report
+	// RxRate and TxRate are the Bandwidth in bytes per second, derived from
+	// this Report and the previous one; nil when there is no usable previous
+	// Report (the first one, or after a reboot reset the counters).
+	RxRate *float64 `json:"rx_rate,omitempty"`
+	TxRate *float64 `json:"tx_rate,omitempty"`
+}
+
+// withBandwidth fills in the Bandwidth of cur relative to the Host's previous Report.
+func withBandwidth(cur reportView, prev reportView, havePrev bool) reportView {
+	if !havePrev {
+		return cur
+	}
+	seconds := float64(cur.Time-prev.Time) / 1000
+	if seconds <= 0 {
+		return cur
+	}
+	cur.RxRate = rate(prev.NetRxBytes, cur.NetRxBytes, seconds)
+	cur.TxRate = rate(prev.NetTxBytes, cur.NetTxBytes, seconds)
+	return cur
+}
+
+func rate(prev, cur *uint64, seconds float64) *float64 {
+	// A counter that went down was reset, normally by a reboot: Traffic
+	// restarts from zero and there is no meaningful rate for this interval.
+	if prev == nil || cur == nil || *cur < *prev {
+		return nil
+	}
+	r := float64(*cur-*prev) / seconds
+	return &r
 }
 
 // latestReports holds the most recent Report of each Host, in memory.

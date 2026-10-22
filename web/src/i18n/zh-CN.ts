@@ -28,6 +28,13 @@ export const zhCN: Translation = {
     name: '名称',
     cpu: 'CPU',
     memory: '内存',
+    swap: '交换',
+    disk: '磁盘',
+    load: '负载',
+    bandwidth: '带宽',
+    traffic: '流量',
+    in: '入',
+    out: '出',
   },
   addHost: {
     title: '添加主机',

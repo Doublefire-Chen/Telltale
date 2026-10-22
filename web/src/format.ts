@@ -20,3 +20,14 @@ export function formatBytes(value: number | undefined, lang: string): string {
   const digits = unit === 0 ? 0 : 1
   return `${new Intl.NumberFormat(lang, { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n)} ${byteUnits[unit]}`
 }
+
+export function formatRate(bytesPerSecond: number | undefined, lang: string): string {
+  if (bytesPerSecond === undefined) return unknown
+  return `${formatBytes(bytesPerSecond, lang)}/s`
+}
+
+export function formatLoad(values: (number | undefined)[], lang: string): string {
+  if (values.some((v) => v === undefined)) return unknown
+  const nf = new Intl.NumberFormat(lang, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return values.map((v) => nf.format(v!)).join(' ')
+}

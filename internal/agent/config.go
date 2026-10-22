@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path"
 	"runtime"
 	"strings"
 	"time"
@@ -39,6 +40,10 @@ type Config struct {
 	Token string `toml:"token"`
 	// Interval is the time between Reports; at least v1.MinInterval.
 	Interval duration `toml:"interval"`
+	// ExcludeInterfaces are glob patterns of network interfaces left out of
+	// Traffic. When unset, DefaultExcludeInterfaces applies; setting it
+	// replaces the default list.
+	ExcludeInterfaces []string `toml:"exclude_interfaces"`
 }
 
 // duration decodes TOML strings like "2s".
@@ -95,6 +100,11 @@ func (c Config) validate() error {
 	}
 	if c.Interval.Duration < v1.MinInterval {
 		return fmt.Errorf("interval must be at least %s", v1.MinInterval)
+	}
+	for _, p := range c.ExcludeInterfaces {
+		if _, err := path.Match(p, ""); err != nil {
+			return fmt.Errorf("exclude_interfaces: bad pattern %q", p)
+		}
 	}
 	return nil
 }

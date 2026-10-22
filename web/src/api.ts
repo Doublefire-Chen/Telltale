@@ -15,6 +15,17 @@ export type Report = {
   interval_ms: number
   cpu_percent?: number
   memory_used?: number
+  swap_used?: number
+  load1?: number
+  load5?: number
+  load15?: number
+  disk_used?: number
+  /** Traffic: bytes since the Host's last boot. */
+  net_rx_bytes?: number
+  net_tx_bytes?: number
+  /** Bandwidth in bytes per second, derived by the Dashboard. */
+  rx_rate?: number
+  tx_rate?: number
 }
 
 export type Host = {

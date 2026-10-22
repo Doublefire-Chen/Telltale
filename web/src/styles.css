@@ -199,3 +199,17 @@ pre {
 .hosts tbody tr:last-child > * {
   border-bottom: none;
 }
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.hosts td,
+.hosts th {
+  white-space: nowrap;
+}
+
+.in-out {
+  display: flex;
+  flex-direction: column;
+}

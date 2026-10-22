@@ -28,5 +28,6 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	agent.NewSender(cfg, agent.SystemCollector{}, logger).Run(ctx)
+	collector := agent.SystemCollector{ExcludeInterfaces: cfg.ExcludeInterfaces}
+	agent.NewSender(cfg, collector, logger).Run(ctx)
 }

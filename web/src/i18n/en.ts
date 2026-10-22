@@ -27,6 +27,13 @@ export const en = {
     name: 'Name',
     cpu: 'CPU',
     memory: 'Memory',
+    swap: 'Swap',
+    disk: 'Disk',
+    load: 'Load',
+    bandwidth: 'Bandwidth',
+    traffic: 'Traffic',
+    in: 'In',
+    out: 'Out',
   },
   addHost: {
     title: 'Add Host',

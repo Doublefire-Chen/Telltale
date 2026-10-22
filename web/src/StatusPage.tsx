@@ -1,7 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type AddedHost, addHost, ApiError, getStatus, type Host, type LiveMessage, liveURL } from './api'
-import { formatBytes, formatPercent } from './format'
+import { formatBytes, formatLoad, formatPercent, formatRate } from './format'
 
 const reconnectDelayMs = 2000
 
@@ -73,24 +73,62 @@ function HostTable({ hosts }: { hosts: Host[] }) {
   const { t, i18n } = useTranslation()
   const lang = i18n.resolvedLanguage ?? 'en'
   return (
-    <table className="hosts">
-      <thead>
-        <tr>
-          <th scope="col">{t('status.name')}</th>
-          <th scope="col">{t('status.cpu')}</th>
-          <th scope="col">{t('status.memory')}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {hosts.map((h) => (
-          <tr key={h.id}>
-            <th scope="row">{h.name}</th>
-            <td>{formatPercent(h.report?.cpu_percent, lang)}</td>
-            <td>{formatBytes(h.report?.memory_used, lang)}</td>
+    <div className="table-scroll">
+      <table className="hosts">
+        <thead>
+          <tr>
+            <th scope="col">{t('status.name')}</th>
+            <th scope="col">{t('status.cpu')}</th>
+            <th scope="col">{t('status.load')}</th>
+            <th scope="col">{t('status.memory')}</th>
+            <th scope="col">{t('status.swap')}</th>
+            <th scope="col">{t('status.disk')}</th>
+            <th scope="col">{t('status.bandwidth')}</th>
+            <th scope="col">{t('status.traffic')}</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {hosts.map((h) => {
+            const r = h.report
+            return (
+              <tr key={h.id}>
+                <th scope="row">{h.name}</th>
+                <td>{formatPercent(r?.cpu_percent, lang)}</td>
+                <td>{formatLoad([r?.load1, r?.load5, r?.load15], lang)}</td>
+                <td>{formatBytes(r?.memory_used, lang)}</td>
+                <td>{formatBytes(r?.swap_used, lang)}</td>
+                <td>{formatBytes(r?.disk_used, lang)}</td>
+                <td>
+                  <InOut inValue={formatRate(r?.rx_rate, lang)} outValue={formatRate(r?.tx_rate, lang)} />
+                </td>
+                <td>
+                  <InOut inValue={formatBytes(r?.net_rx_bytes, lang)} outValue={formatBytes(r?.net_tx_bytes, lang)} />
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** InOut shows an inbound and an outbound value, labelled for screen readers. */
+function InOut({ inValue, outValue }: { inValue: string; outValue: string }) {
+  const { t } = useTranslation()
+  return (
+    <span className="in-out">
+      <span>
+        <span aria-hidden="true">↓ </span>
+        <span className="visually-hidden">{t('status.in')} </span>
+        {inValue}
+      </span>
+      <span>
+        <span aria-hidden="true">↑ </span>
+        <span className="visually-hidden">{t('status.out')} </span>
+        {outValue}
+      </span>
+    </span>
   )
 }
 

@@ -38,7 +38,8 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		rep.IntervalMS = minMS
 	}
 
-	view := reportView{ReceivedAt: s.now().UnixMilli(), Report: rep}
+	prev, havePrev := s.latest.get(host.ID)
+	view := withBandwidth(reportView{ReceivedAt: s.now().UnixMilli(), Report: rep}, prev, havePrev)
 	s.latest.set(host.ID, view)
 	s.hub.publish(liveMessage{Type: "report", HostID: host.ID, Report: &view})
 	w.WriteHeader(http.StatusNoContent)

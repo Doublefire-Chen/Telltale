@@ -7,6 +7,19 @@ import i18n from './i18n'
 
 const report = { received_at: 1, time: 1, interval_ms: 2000, cpu_percent: 37.5, memory_used: 1.5 * 1024 ** 3 }
 
+const fullReport = {
+  ...report,
+  swap_used: 0,
+  load1: 0.5,
+  load5: 0.25,
+  load15: 1,
+  disk_used: 40 * 1024 ** 3,
+  net_rx_bytes: 3 * 1024 ** 4,
+  net_tx_bytes: 512 * 1024 ** 2,
+  rx_rate: 2048,
+  tx_rate: 0,
+}
+
 describe('Status page', () => {
   it('lists Hosts with CPU and memory, and "—" before the first Report', async () => {
     stubDashboard({
@@ -22,7 +35,26 @@ describe('Status page', () => {
     expect(within(tokyo).getByText('37.5%')).toBeTruthy()
     expect(within(tokyo).getByText('1.5 GiB')).toBeTruthy()
     const fresh = screen.getByRole('rowheader', { name: 'new-box' }).closest('tr')!
-    expect(within(fresh).getAllByText('—')).toHaveLength(2)
+    // CPU, load, memory, swap, disk, and in/out for Bandwidth and Traffic.
+    expect(within(fresh).getAllByText(/—/)).toHaveLength(9)
+  })
+
+  it('shows load, swap, disk, Bandwidth and Traffic', async () => {
+    stubDashboard({ authenticated: true, hosts: [{ id: 'h1', name: 'tokyo', report: fullReport }] })
+    render(<App />)
+
+    const row = (await screen.findByRole('rowheader', { name: 'tokyo' })).closest('tr')!
+    const cells = within(row).getAllByRole('cell').map((c) => c.textContent)
+    expect(cells).toEqual([
+      '37.5%',
+      '0.50 0.25 1.00',
+      '1.5 GiB',
+      '0 B',
+      '40.0 GiB',
+      '↓ In 2.0 KiB/s↑ Out 0 B/s',
+      '↓ In 3.0 TiB↑ Out 512.0 MiB',
+    ])
+    expect(within(row).getAllByText('In', { exact: false })).toHaveLength(2)
   })
 
   it('updates live from the WebSocket without reloading', async () => {
