@@ -1,57 +1,31 @@
-/* After Nezha V0's default theme as people commonly styled it: raised
-   ("neumorphic") cards on a grey-blue page, pill-shaped usage bars with a
-   gradient that goes green, orange and red as they fill. */
+/* After Nezha V0's AngelKanade theme (ktz.css, by 夜灭, https://yujie.pro): raised
+   ("neumorphic") cards on #e6eef4, grey text with an embossed shadow, and
+   pill-shaped bars filled with green, orange or crimson gradients. Values
+   are copied from that theme as rendered over Semantic UI 2.4. */
 :root {
-  --bg: #e4e9f0;
-  --surface: #e9eef5;
-  --raised: 9px 9px 20px #c3cad5, -9px -9px 20px #ffffff;
-  --raised-small: 4px 4px 9px #c3cad5, -4px -4px 9px #ffffff;
-  --inset: inset 3px 3px 6px #c3cad5, inset -3px -3px 6px #ffffff;
-  --text: #33363b;
-  --muted: #6b717a;
-  --label: #5f656e;
-  --border: #d0d6df;
-  --accent: #1a8fe8;
-  --accent-text: #ffffff;
+  --bg: #e6eef4;
+  --text: rgba(0, 0, 0, 0.87);
+  --value: rgba(0, 0, 0, 0.68);
+  --label: #787878;
+  --title: #525151;
+  --emboss: 2px 2px 3px #c4cacf, -2px -2px 3px #fff;
+  --raised: -6px -6px 12px #b8bec3, 6px 6px 12px #fff;
+  --raised-soft: 7px 7px 15px #cfd6dc, -7px -7px 15px #fdffff;
+  --pressed: inset 5px 5px 16px #d6dde3, inset -5px -5px 16px #f6ffff;
+  --track: #d9e1e8;
+  --track-shadow: inset 3px 3px 6px #b8bfc5, inset -3px -3px 6px #faffff;
+  --divider: rgba(34, 36, 38, 0.15);
+  --fine: linear-gradient(312deg, #57693b, #638b43, #6daf4a, #76d450);
+  --warning: linear-gradient(269deg, #de4723, #de6425, #dd7d26, #db9428);
+  --critical: linear-gradient(287deg, #12032a, #480e2a, #7c1028, #b20d24);
+  --info: rgb(10, 148, 242);
+  --primary: #0338d6;
   --danger: #c4122f;
-  --fine: linear-gradient(90deg, #8fdc5f, #4a7d2a);
-  --warning: linear-gradient(90deg, #ffcd6b, #d9810b);
-  --critical: linear-gradient(90deg, #ff8a8a, #c1162f);
-  --stale: linear-gradient(90deg, #c4ccd5, #848f9b);
-  --online: #2fb344;
-  --cpu: #3b82f6;
-  --ram: #16a34a;
-  --hdd: #b91c1c;
-  --text-shadow: 1px 1px 2px rgb(0 0 0 / 0.12);
-  --footer-bg: #1b1c1d;
-  --footer-text: #d4d4d5;
-  color-scheme: light dark;
-  font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #23262b;
-    --surface: #272b31;
-    --raised: 8px 8px 18px #18191c, -8px -8px 18px #30353c;
-    --raised-small: 3px 3px 8px #18191c, -3px -3px 8px #30353c;
-    --inset: inset 3px 3px 6px #18191c, inset -3px -3px 6px #33383f;
-    --text: #e8eaed;
-    --muted: #a3a9b2;
-    --label: #a9afb8;
-    --border: #3a3f46;
-    --accent: #3aa9f5;
-    --accent-text: #0d0d10;
-    --danger: #ff7b6e;
-    --stale: linear-gradient(90deg, #6c757f, #4b535c);
-    --online: #3fcf62;
-    --cpu: #60a5fa;
-    --ram: #4ade80;
-    --hdd: #f87171;
-    --text-shadow: 1px 1px 2px rgb(0 0 0 / 0.5);
-    --footer-bg: #000000;
-    --footer-text: #bdbdbd;
-  }
+  --popup: #fafafaeb;
+  color-scheme: light;
+  font-family: 'HarmonyOS Sans SC', 'HarmonyOS Sans', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.4285em;
 }
 
 * {
@@ -59,77 +33,18 @@
 }
 
 body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-}
-
-body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
 }
 
 #root {
   display: flex;
   flex-direction: column;
   flex: 1;
-}
-
-.header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px max(16px, calc((100% - 1680px) / 2));
-  background: var(--bg);
-}
-
-.brand {
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.main {
-  flex: 1;
-  width: 100%;
-  max-width: 1712px;
-  margin: 0 auto;
-  padding: 20px 16px 32px;
-}
-
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 420px;
-  margin: 0 auto;
-  padding: 24px;
-  border-radius: 22px;
-  background: var(--surface);
-  box-shadow: var(--raised);
-}
-
-.card h1 {
-  margin: 0;
-  font-size: 1.25rem;
-}
-
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.9rem;
 }
 
 input,
@@ -139,266 +54,109 @@ button {
   color: inherit;
 }
 
-input,
-select {
-  padding: 8px 12px;
-  border: none;
-  border-radius: 10px;
-  background: var(--bg);
-  box-shadow: var(--inset);
+/* Layout: Semantic UI's container as Nezha sizes it (95%, at most 1680px). */
+
+.header,
+.main {
+  width: 95%;
+  max-width: 1680px;
+  margin-right: auto;
+  margin-left: auto;
 }
 
-button {
-  padding: 8px 16px;
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  margin-top: 20px;
+  font-size: 15px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 17.14px;
+  line-height: 15px;
+  border-radius: 10px;
+  box-shadow: var(--pressed);
+  color: var(--label);
+  font-weight: 500;
+  text-shadow: var(--emboss);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-actions button.secondary,
+.header-actions select {
+  padding: 11.79px 22.5px;
+  line-height: 15px;
   border: none;
-  border-radius: 12px;
-  background: var(--accent);
-  color: var(--accent-text);
-  box-shadow: var(--raised-small);
+  border-radius: 4px;
+  background: var(--bg);
+  box-shadow: none;
+  color: var(--label);
+  font-weight: 500;
+  text-shadow: var(--emboss);
   cursor: pointer;
 }
 
-button.secondary {
-  background: var(--surface);
-  color: var(--text);
+.header-actions button.secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
-button.secondary:active {
-  box-shadow: var(--inset);
+.header-actions button.secondary:hover,
+.header-actions select:hover {
+  border-radius: 10px;
+  box-shadow: var(--pressed);
 }
 
-button:disabled {
-  opacity: 0.6;
-  cursor: default;
+.main {
+  flex: 1;
+  padding: 40px 0 32px;
 }
 
-pre {
-  overflow-x: auto;
-  padding: 12px;
-  border-radius: 6px;
+.footer {
+  padding: 14px 0;
   background: var(--bg);
+  color: var(--label);
+  text-align: center;
+  font-size: 14px;
+  text-shadow: var(--emboss);
 }
 
-.language {
-  flex-direction: row;
+.footer a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
 }
 
-.muted {
-  color: var(--muted);
-}
-
-.error {
-  margin: 0;
-  color: var(--danger);
-}
-
-.visually-hidden {
-  position: absolute;
-  left: 0;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
+/* Groups: Semantic's styled accordion, flattened onto the page. */
 
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
-
-.stack > .card {
-  margin: 0;
-}
-
-.card h2 {
-  margin: 0;
-  font-size: 1.1rem;
-}
-
-.row {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-
-.badge {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--danger);
-  color: var(--danger);
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.hint {
-  font-size: 0.8rem;
-}
-
-
-button.icon {
-  padding: 2px 10px;
-  line-height: 1.2;
-}
-
-
-
-
-.stack > .card.settings {
-  max-width: none;
-}
-
-.settings-fields {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 20px;
-  align-items: flex-start;
-}
-
-.settings-fields input {
-  width: 14em;
-}
-
-.settings-fields input.short {
-  width: 6em;
-}
-
-label.checkbox {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  align-self: center;
-}
-
-label.checkbox input {
-  width: auto;
-}
-
-.row .spacer {
-  flex: 1;
-}
-
-.row {
-  flex-wrap: wrap;
-}
-
-.danger-zone {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.danger-zone > div {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  max-width: 32em;
-}
-
-.danger-zone [role='alertdialog'] p {
-  margin: 0 0 8px;
-}
-
-button.danger {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: #fff;
-}
-
-button.danger-text {
-  color: var(--danger);
-}
-
-
-.tag {
-  display: inline-block;
-  margin-right: 6px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.75rem;
-}
-
-a.host-name {
-  color: inherit;
-  text-decoration: none;
-}
-
-a.host-name:hover {
-  text-decoration: underline;
-}
-
-button.link {
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--accent);
-}
-
-.segmented {
-  display: inline-flex;
-  align-self: flex-start;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.segmented button {
-  border: none;
-  border-radius: 0;
-  background: var(--surface);
-  color: var(--text);
-}
-
-.segmented button[aria-pressed='true'] {
-  background: var(--accent);
-  color: var(--accent-text);
-}
-
-.charts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
-  gap: 16px;
-}
-
-.chart {
-  margin: 0;
-  padding: 16px;
-  border-radius: 22px;
-  background: var(--surface);
-  box-shadow: var(--raised);
-  min-width: 0;
-}
-
-.chart figcaption {
-  margin-bottom: 8px;
-  font-weight: 500;
-}
-
-.chart .u-legend {
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-/* Groups and Host cards */
 
 .group > summary {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 4px 18px;
+  gap: 5px;
+  padding: 10.5px 14px;
+  color: var(--label);
   cursor: pointer;
   list-style: none;
   user-select: none;
+  text-shadow: var(--emboss);
 }
 
 .group > summary::-webkit-details-marker {
@@ -409,11 +167,12 @@ button.link {
   content: '';
   width: 0;
   height: 0;
-  border-top: 6px solid var(--label);
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
+  margin-right: 4px;
+  border-top: 5px solid var(--label);
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
   transform: rotate(-90deg);
-  transition: transform 0.15s;
+  transition: transform 0.1s;
 }
 
 .group[open] > summary::before {
@@ -422,41 +181,38 @@ button.link {
 
 .group > summary h2 {
   margin: 0;
-  color: var(--label);
-  font-size: 1.05rem;
-  font-weight: 600;
-  text-shadow: var(--text-shadow);
+  font-size: 14px;
+  font-weight: 900;
 }
 
 .group-count {
-  color: var(--muted);
-  font-size: 0.8rem;
+  display: none;
 }
 
 .host-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
-  gap: 26px;
-  padding: 0 4px 30px;
+  gap: 24.5px 21px;
+  padding: 21px 14px 21px;
 }
 
-@media (min-width: 1400px) {
+@media (min-width: 1200px) {
   .host-cards {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+/* Host cards */
 
 .host-card {
   position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 18px 20px 16px;
-  border-radius: 24px;
-  background: var(--surface);
+  padding: 24px 14px 5px;
+  border-radius: 20px;
+  background: var(--bg);
   box-shadow: var(--raised);
-  font-variant-numeric: tabular-nums;
-  text-shadow: var(--text-shadow);
 }
 
 .host-card-header {
@@ -464,27 +220,32 @@ button.link {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
-  padding: 0 52px 12px;
-  border-bottom: 1px solid var(--border);
+  min-height: 28px;
+  padding: 0 32px;
+}
+
+.host-card-header::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -14px;
+  left: 0;
+  border-top: 1px solid var(--divider);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .host-title {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 5px;
   min-width: 0;
   margin: 0;
-  font-size: 1.12rem;
-}
-
-.card-actions {
-  position: absolute;
-  top: -2px;
-  right: -6px;
-  display: flex;
-  gap: 2px;
+  color: var(--title);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 23px;
+  text-shadow: var(--emboss);
 }
 
 .flags {
@@ -495,13 +256,16 @@ button.link {
 
 .flag {
   display: block;
-  border-radius: 3px;
-  box-shadow: 1px 1px 3px rgb(0 0 0 / 0.3);
+  border-radius: 2px;
+}
+
+.flag.round {
+  border-radius: 50%;
+  box-shadow: -1px -1px 2px #eee, 1px 1px 2px #000;
 }
 
 .globe {
-  color: var(--muted);
-  box-shadow: none;
+  color: var(--label);
 }
 
 .os-logo {
@@ -522,88 +286,72 @@ svg.os-logo {
 a.host-name {
   overflow: hidden;
   color: inherit;
-  font-weight: 700;
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 a.host-name:hover {
-  color: var(--accent);
+  text-decoration: underline;
 }
 
-/* Online is a small green dot; Offline and Waiting are spelled out, in grey,
-   so nothing red sits next to a red flag. */
+/* Nezha appends "[Offline]" to the name; Online needs no marker. */
+.state.online {
+  display: none;
+}
+
 .state {
   flex-shrink: 0;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-shadow: none;
+  white-space: nowrap;
 }
 
-.state.online {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--online);
-}
-
-.state.offline,
-.state.waiting {
-  padding: 1px 7px;
-  border-radius: 8px;
-  color: var(--muted);
-  box-shadow: var(--inset);
+.card-actions {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  display: flex;
+  align-items: center;
 }
 
 button.card-icon {
   display: inline-flex;
-  padding: 5px;
+  padding: 3px;
+  border: none;
   border-radius: 50%;
   background: transparent;
-  box-shadow: none;
-  color: var(--accent);
+  color: var(--info);
+  cursor: pointer;
 }
 
 button.card-icon .icon {
-  width: 22px;
-  height: 22px;
+  width: 17px;
+  height: 17px;
+}
+
+/* Nezha's icons are font glyphs and pick up the embossed text shadow; these
+   are masks, so a matching drop shadow stands in for it. */
+.host-card .icon,
+.host-card .os-logo {
+  filter: drop-shadow(2px 2px 1.5px #c4cacf) drop-shadow(-2px -2px 1.5px #fff);
+}
+
+.host-popover .icon {
+  filter: none;
 }
 
 button.card-icon.settings {
-  color: var(--muted);
-}
-
-button.card-icon:hover,
-button.card-icon[aria-expanded='true'] {
-  box-shadow: var(--inset);
+  color: var(--label);
 }
 
 .icon {
   display: inline-block;
   flex-shrink: 0;
-  width: 1.05em;
-  height: 1.05em;
+  width: 1em;
+  height: 1em;
   background-color: currentColor;
   mask-size: contain;
   mask-repeat: no-repeat;
   mask-position: center;
-}
-
-.muted-icon {
-  color: var(--muted);
-}
-
-.icon.cpu {
-  color: var(--cpu);
-}
-
-.icon.ram {
-  color: var(--ram);
-}
-
-.icon.hdd {
-  color: var(--hdd);
 }
 
 .tags {
@@ -611,37 +359,46 @@ button.card-icon[aria-expanded='true'] {
   justify-content: center;
   flex-wrap: wrap;
   gap: 6px;
-  padding-top: 10px;
-  text-shadow: none;
+  margin-top: 20px;
+  margin-bottom: -12px;
 }
 
+/* Rows: Semantic's three/thirteen-wide grid columns, 28px tall, 14px apart. */
 .metrics {
   display: grid;
-  grid-template-columns: 4.8em 1fr;
+  grid-template-columns: 3fr 13fr;
   align-items: center;
-  gap: 0 12px;
-  margin: 0;
-  padding-top: 6px;
-  font-size: 0.92rem;
+  margin: 7px -14px 0;
 }
 
+/* Content sits at the top of each row, as in Semantic's grid columns. */
 .metrics dt,
 .metrics dd {
   display: flex;
-  align-items: center;
-  min-height: 2.45rem;
+  align-items: flex-start;
+  height: 28px;
+  margin: 14px 0 0;
 }
 
 .metrics dt {
+  padding-left: 14px;
   color: var(--label);
+  font-weight: 500;
   white-space: nowrap;
+  text-shadow: var(--emboss);
 }
 
 .metrics dd {
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  margin: 0;
-  color: var(--text);
+  padding: 0 14px;
+  color: var(--value);
+}
+
+.metrics dd.text {
+  color: var(--label);
+  font-weight: 500;
+  text-shadow: var(--emboss);
 }
 
 .bar {
@@ -649,55 +406,58 @@ button.card-icon[aria-expanded='true'] {
   display: flex;
   align-items: center;
   flex: 1;
-  height: 1.65rem;
-  border-radius: 1rem;
-  background: var(--surface);
-  box-shadow: var(--inset);
+  height: 24.5px;
+  border-radius: 50px;
+  background: var(--track);
+  box-shadow: var(--track-shadow);
 }
 
 .bar-fill {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  /* Wide enough for "100%", so a nearly empty bar is a small round pill. */
-  min-width: 2.6rem;
+  min-width: 1.8em;
   max-width: 100%;
   height: 100%;
-  padding: 0 0.5rem;
-  border-radius: 1rem;
-  box-shadow: 2px 2px 5px rgb(0 0 0 / 0.18);
+  padding-right: 5.6px;
+  border-radius: 15px;
+  background-color: #000;
   transition: width 0.3s;
 }
 
 .bar.fine .bar-fill {
-  background: var(--fine);
+  background-image: var(--fine);
 }
 
 .bar.warning .bar-fill {
-  background: var(--warning);
+  background-image: var(--warning);
 }
 
 .bar.critical .bar-fill {
-  background: var(--critical);
+  background-image: var(--critical);
 }
 
+/* Offline: Nezha's bar collapses to a black dot holding the last value. */
 .bar.stale .bar-fill {
-  background: var(--stale);
+  width: 0 !important;
+  min-width: 2.1em;
+  justify-content: center;
+  padding: 0;
 }
 
 .bar-text {
-  color: #ffffff;
-  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11.2px;
   font-weight: 700;
-  text-shadow: 1px 1px 2px rgb(0 0 0 / 0.45);
+  line-height: 23.1px;
+  text-shadow: 1px 0 1px #eee, -1px 0 1px #000;
   white-space: nowrap;
 }
 
 .bar.empty .bar-text {
-  padding: 0 0.8rem;
-  color: var(--muted);
-  font-weight: 600;
-  text-shadow: none;
+  padding-left: 10px;
+  color: var(--label);
+  text-shadow: var(--emboss);
 }
 
 .in-out,
@@ -705,53 +465,105 @@ button.card-icon[aria-expanded='true'] {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px 14px;
+  gap: 0 0.7em;
 }
 
 .in-out > span,
 .specs > span {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   white-space: nowrap;
+}
+
+.in-out .icon {
+  width: 14px;
+  height: 14px;
 }
 
 .specs .icon {
-  width: 1.2em;
-  height: 1.2em;
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
-.host-card.offline .metrics,
-.host-card.offline .host-name {
-  opacity: 0.6;
+.muted-icon {
+  color: currentColor;
 }
 
-/* Nezha's info popup: drawn over the card, under its header. */
+.icon.cpu {
+  color: #4a86e8;
+}
+
+.icon.ram {
+  color: #00ac0d;
+}
+
+.icon.hdd {
+  color: #980000;
+}
+
+/* Semantic's "bottom left" popup with AngelKanade's colours, as measured on
+   the original: it opens from the info icon's left edge, 3px below it, and
+   may extend past the card. */
+.info-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
 .host-popover {
   position: absolute;
-  top: 58px;
-  right: 12px;
-  left: 12px;
-  z-index: 2;
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: var(--surface);
-  box-shadow: var(--raised);
+  top: calc(100% + 3px);
+  left: -6px;
+  z-index: 20;
+  width: 280px;
+  padding: 21px 14px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: var(--popup);
+  box-shadow: 0 2px 4px 0 rgba(34, 36, 38, 0.12), 0 2px 10px 0 rgba(34, 36, 38, 0.15);
+  color: #000;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  font-weight: 100;
+  line-height: 28px;
+  text-align: left;
   text-shadow: none;
 }
 
+/* The pointer: a small square turned 45 degrees, peeking out above. */
+.host-popover::after {
+  content: '';
+  position: absolute;
+  top: -4.3px;
+  left: 14px;
+  width: 10px;
+  height: 10px;
+  background: var(--popup);
+  transform: rotate(45deg);
+}
+
+/* Bridges the gap to the icon, so moving onto the popover keeps it open. */
+.host-popover::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  right: 0;
+  left: 0;
+  height: 8px;
+}
+
 .host-details {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 5px 14px;
   margin: 0;
-  font-size: 0.82rem;
-  line-height: 1.45;
 }
 
 .host-details dt {
-  color: var(--label);
-  white-space: nowrap;
+  float: left;
+  clear: left;
+  margin-right: 0.3em;
+}
+
+.host-details dt::after {
+  content: ':';
 }
 
 .host-details dd {
@@ -759,30 +571,269 @@ button.card-icon[aria-expanded='true'] {
   overflow-wrap: anywhere;
 }
 
+.host-card.offline .metrics {
+  opacity: 0.85;
+}
+
+/* Admin panels, forms and the history page, in the same raised style. */
+
 .admin-panels {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
-  gap: 16px;
+  gap: 21px;
   align-items: start;
+  padding: 0 14px;
 }
 
-.admin-panels > .card {
+.settings-anchor {
+  padding: 0 14px;
+  scroll-margin-top: 20px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 24px;
+  border-radius: 20px;
+  background: var(--bg);
+  box-shadow: var(--raised);
+}
+
+.admin-panels > .card,
+.stack > .card,
+.stack > .card.settings {
   max-width: none;
   margin: 0;
 }
 
-.settings-anchor {
-  scroll-margin-top: 72px;
+.card h1,
+.card h2 {
+  margin: 0;
+  color: var(--title);
+  font-size: 1.15rem;
+  text-shadow: var(--emboss);
 }
 
-.footer {
-  padding: 14px 16px;
-  background: var(--footer-bg);
-  color: var(--footer-text);
-  text-align: center;
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--label);
+  font-weight: 500;
+}
+
+input,
+select {
+  padding: 9px 14px;
+  border: none;
+  border-radius: 50px;
+  background: var(--track);
+  box-shadow: var(--track-shadow);
+  color: var(--text);
+}
+
+button {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: var(--raised-soft);
+  cursor: pointer;
+}
+
+button.secondary {
+  background: var(--bg);
+  color: var(--label);
+  text-shadow: var(--emboss);
+}
+
+button.secondary:active,
+button.secondary[aria-pressed='true'] {
+  box-shadow: var(--pressed);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+button.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+button.danger-text {
+  color: var(--danger);
+}
+
+button.link {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--info);
+  font-weight: 400;
+}
+
+pre {
+  overflow-x: auto;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--track);
+  box-shadow: var(--track-shadow);
+}
+
+.language {
+  flex-direction: row;
+}
+
+.muted {
+  color: var(--label);
+}
+
+.hint {
+  font-size: 0.85em;
+  font-weight: 400;
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.visually-hidden {
+  position: absolute;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.row .spacer {
+  flex: 1;
+}
+
+.settings-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 20px;
+}
+
+.settings-fields input {
+  width: 14em;
+}
+
+.settings-fields input.short {
+  width: 6em;
+}
+
+label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  align-self: flex-start;
+  gap: 8px;
+}
+
+label.checkbox input {
+  width: auto;
+  box-shadow: none;
+}
+
+.danger-zone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+}
+
+.danger-zone > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 32em;
+}
+
+.danger-zone [role='alertdialog'] p {
+  margin: 0 0 8px;
+}
+
+.badge,
+.tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
   font-size: 0.8rem;
+  font-weight: 500;
+  text-shadow: none;
 }
 
-.footer a {
-  color: inherit;
+.badge {
+  box-shadow: var(--track-shadow);
+  color: var(--danger);
+}
+
+.tag {
+  box-shadow: var(--track-shadow);
+  color: var(--label);
+}
+
+.segmented {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 8px;
+}
+
+.segmented button {
+  background: var(--bg);
+  color: var(--label);
+  text-shadow: var(--emboss);
+}
+
+.segmented button[aria-pressed='true'] {
+  box-shadow: var(--pressed);
+}
+
+.charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  gap: 21px;
+}
+
+.chart {
+  min-width: 0;
+  margin: 0;
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--bg);
+  box-shadow: var(--raised);
+}
+
+.chart figcaption {
+  margin-bottom: 8px;
+  color: var(--label);
+  font-weight: 500;
+  text-shadow: var(--emboss);
+}
+
+.chart .u-legend {
+  color: var(--label);
+  font-size: 0.8rem;
 }

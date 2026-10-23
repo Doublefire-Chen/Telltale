@@ -113,6 +113,7 @@ export const en = {
   footer: {
     poweredBy: 'Powered by Telltale',
     geoip: 'IP geolocation by DB-IP',
+    theme: 'Theme after AngelKanade by 夜灭',
   },
 } as const
 

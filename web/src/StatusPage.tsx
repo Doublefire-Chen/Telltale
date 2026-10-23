@@ -237,7 +237,10 @@ function displayName(h: Host, unnamed: string): string {
 function HostCard({ host: h, dashboardVersion, now, admin, onOpen, settingsOpen, onToggleSettings }: HostCardProps) {
   const { t, i18n } = useTranslation()
   const lang = i18n.resolvedLanguage ?? 'en'
-  const [detailsOpen, setDetailsOpen] = useState(false)
+  // Like Nezha's, the details popover opens on hover; a click pins it open.
+  const [pinned, setPinned] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const detailsOpen = pinned || hovered
   const r = h.report
   const info = h.host_info
   const name = displayName(h, t('status.unnamed'))
@@ -249,7 +252,7 @@ function HostCard({ host: h, dashboardVersion, now, admin, onOpen, settingsOpen,
     <article className={`host-card ${state}`} aria-labelledby={nameId}>
       <header className="host-card-header">
         <h3 className="host-title">
-          <Flags countries={h.countries} />
+          <Flags countries={h.countries} round />
           <OsLogo info={info} />
           <a
             id={nameId}
@@ -264,10 +267,10 @@ function HostCard({ host: h, dashboardVersion, now, admin, onOpen, settingsOpen,
             {name}
           </a>
           <span className={`state ${state}`} role="img" aria-label={t(`status.${state}`)} title={t(`status.${state}`)}>
-            {state !== 'online' && t(`status.${state}Short`)}
+            {state !== 'online' && `[${t(`status.${state}Short`)}]`}
           </span>
         </h3>
-        <div className="card-actions">
+        <div className="card-actions" onMouseLeave={() => setHovered(false)}>
           {admin && (
             <button
               type="button"
@@ -280,17 +283,64 @@ function HostCard({ host: h, dashboardVersion, now, admin, onOpen, settingsOpen,
               <Icon name="gear-fill" />
             </button>
           )}
-          <button
-            type="button"
-            className="card-icon info"
-            aria-expanded={detailsOpen}
-            aria-controls={detailsId}
-            aria-label={t('status.details', { name })}
-            title={t('status.details', { name })}
-            onClick={() => setDetailsOpen(!detailsOpen)}
-          >
-            <Icon name="info-circle-fill" />
-          </button>
+          <span className="info-anchor">
+            <button
+              type="button"
+              className="card-icon info"
+              aria-expanded={detailsOpen}
+              aria-controls={detailsId}
+              aria-label={t('status.details', { name })}
+              title={t('status.details', { name })}
+              onMouseEnter={() => setHovered(true)}
+              onClick={() => setPinned(!pinned)}
+            >
+              <Icon name="info-circle-fill" />
+            </button>
+          {detailsOpen && (
+            <div id={detailsId} className="host-popover" role="group" aria-label={t('status.details', { name })}>
+              <dl className="host-details">
+                {admin && (
+                  <>
+                    <dt>IPv4</dt>
+                    <dd>{h.ipv4 || unknown}</dd>
+                    <dt>IPv6</dt>
+                    <dd>{h.ipv6 || unknown}</dd>
+                  </>
+                )}
+                <dt>{t('status.system')}</dt>
+                <dd>{systemSummary(info)}</dd>
+                <dt>{t('status.kernel')}</dt>
+                <dd>{info?.kernel_version || unknown}</dd>
+                <dt>{t('status.cpuModel')}</dt>
+                <dd>{info?.cpu_model || unknown}</dd>
+                <dt>{t('status.memory')}</dt>
+                <dd>{formatUsage(r?.memory_used, info?.memory_total, lang)}</dd>
+                <dt>{t('status.swap')}</dt>
+                <dd>{info?.swap_total === 0 ? t('status.off') : formatUsage(r?.swap_used, info?.swap_total, lang)}</dd>
+                <dt>{t('status.disk')}</dt>
+                <dd>{formatUsage(r?.disk_used, info?.disk_total, lang)}</dd>
+                <dt>{t('status.load')}</dt>
+                <dd>{formatLoad([r?.load1, r?.load5, r?.load15], lang)}</dd>
+                <dt>{t('status.processes')}</dt>
+                <dd>{r?.process_count ?? unknown}</dd>
+                <dt>{t('status.connections')}</dt>
+                <dd>
+                  {r?.tcp_connections === undefined && r?.udp_connections === undefined
+                    ? unknown
+                    : `TCP ${r?.tcp_connections ?? unknown} · UDP ${r?.udp_connections ?? unknown}`}
+                </dd>
+                <dt>{t('status.bootTime')}</dt>
+                <dd>
+                  {info?.boot_time === undefined
+                    ? unknown
+                    : new Date(info.boot_time * 1000).toLocaleString(lang, { dateStyle: 'medium', timeStyle: 'short' })}
+                </dd>
+                <dt>{t('status.agentVersion')}</dt>
+                <dd>{info?.agent_version || unknown}</dd>
+              </dl>
+            </div>
+          )}
+          </span>
         </div>
       </header>
       {(h.hidden || h.agent_outdated) && (
@@ -325,11 +375,11 @@ function HostCard({ host: h, dashboardVersion, now, admin, onOpen, settingsOpen,
           />
         </dd>
         <dt>{t('status.bandwidth')}</dt>
-        <dd>
+        <dd className="text">
           <InOut inValue={formatRate(r?.rx_rate, lang)} outValue={formatRate(r?.tx_rate, lang)} />
         </dd>
         <dt>{t('status.traffic')}</dt>
-        <dd>
+        <dd className="text">
           <InOut inValue={formatBytes(r?.net_rx_bytes, lang)} outValue={formatBytes(r?.net_tx_bytes, lang)} filled />
         </dd>
         <dt>{t('status.disk')}</dt>
@@ -337,7 +387,7 @@ function HostCard({ host: h, dashboardVersion, now, admin, onOpen, settingsOpen,
           <UsageBar label={t('status.disk')} percent={ratio(r?.disk_used, info?.disk_total)} live={live} />
         </dd>
         <dt>{t('status.specs')}</dt>
-        <dd className="specs">
+        <dd className="text specs">
           <span>
             <Icon name="cpu-fill" className="cpu" />
             {info?.cpu_cores ? t('status.cores', { count: info.cpu_cores }) : unknown}
@@ -348,61 +398,17 @@ function HostCard({ host: h, dashboardVersion, now, admin, onOpen, settingsOpen,
             {formatCapacity(info?.memory_total, lang)}
           </span>
           <span>
-            <Icon name="hdd-fill" className="hdd" />
+            <Icon name="hdd-rack-fill" className="hdd" />
             <span className="visually-hidden">{t('status.disk')} </span>
             {formatCapacity(info?.disk_total, lang)}
           </span>
         </dd>
         <dt>{t('status.uptime')}</dt>
-        <dd>
+        <dd className="text">
           <Icon name="clock-fill" className="muted-icon" />
           <Uptime bootTime={info?.boot_time} now={now} />
         </dd>
       </dl>
-      {detailsOpen && (
-        <div id={detailsId} className="host-popover" role="group" aria-label={t('status.details', { name })}>
-          <dl className="host-details">
-            {admin && (
-              <>
-                <dt>IPv4</dt>
-                <dd>{h.ipv4 || unknown}</dd>
-                <dt>IPv6</dt>
-                <dd>{h.ipv6 || unknown}</dd>
-              </>
-            )}
-            <dt>{t('status.system')}</dt>
-            <dd>{systemSummary(info)}</dd>
-            <dt>{t('status.kernel')}</dt>
-            <dd>{info?.kernel_version || unknown}</dd>
-            <dt>{t('status.cpuModel')}</dt>
-            <dd>{info?.cpu_model || unknown}</dd>
-            <dt>{t('status.memory')}</dt>
-            <dd>{formatUsage(r?.memory_used, info?.memory_total, lang)}</dd>
-            <dt>{t('status.swap')}</dt>
-            <dd>{info?.swap_total === 0 ? t('status.off') : formatUsage(r?.swap_used, info?.swap_total, lang)}</dd>
-            <dt>{t('status.disk')}</dt>
-            <dd>{formatUsage(r?.disk_used, info?.disk_total, lang)}</dd>
-            <dt>{t('status.load')}</dt>
-            <dd>{formatLoad([r?.load1, r?.load5, r?.load15], lang)}</dd>
-            <dt>{t('status.processes')}</dt>
-            <dd>{r?.process_count ?? unknown}</dd>
-            <dt>{t('status.connections')}</dt>
-            <dd>
-              {r?.tcp_connections === undefined && r?.udp_connections === undefined
-                ? unknown
-                : `TCP ${r?.tcp_connections ?? unknown} · UDP ${r?.udp_connections ?? unknown}`}
-            </dd>
-            <dt>{t('status.bootTime')}</dt>
-            <dd>
-              {info?.boot_time === undefined
-                ? unknown
-                : new Date(info.boot_time * 1000).toLocaleString(lang, { dateStyle: 'medium', timeStyle: 'short' })}
-            </dd>
-            <dt>{t('status.agentVersion')}</dt>
-            <dd>{info?.agent_version || unknown}</dd>
-          </dl>
-        </div>
-      )}
     </article>
   )
 }

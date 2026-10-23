@@ -114,5 +114,6 @@ export const zhCN: Translation = {
   footer: {
     poweredBy: '由 Telltale 驱动',
     geoip: 'IP 地理位置数据由 DB-IP 提供',
+    theme: '主题仿照夜灭的 AngelKanade',
   },
 }

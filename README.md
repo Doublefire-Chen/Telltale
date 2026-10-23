@@ -170,4 +170,6 @@ signs and publishes everything.
 GPL-3.0. IP geolocation by [DB-IP](https://db-ip.com) (CC BY 4.0). Flags from
 [flag-icons](https://github.com/lipis/flag-icons) (MIT), OS logos from
 [font-logos](https://github.com/Lukas-W/font-logos) (public domain), icons from
-[Bootstrap Icons](https://icons.getbootstrap.com) (MIT).
+[Bootstrap Icons](https://icons.getbootstrap.com) (MIT). The Status page's look
+follows the AngelKanade theme for Nezha Monitoring by
+[夜灭](https://yujie.pro).

@@ -157,3 +157,4 @@ GPL-3.0。IP 地理位置数据由 [DB-IP](https://db-ip.com) 提供（CC BY 4.0
 国旗图标来自 [flag-icons](https://github.com/lipis/flag-icons)（MIT），
 系统图标来自 [font-logos](https://github.com/Lukas-W/font-logos)（公有领域），
 其他图标来自 [Bootstrap Icons](https://icons.getbootstrap.com)（MIT）。
+状态页的样式仿照 [夜灭](https://yujie.pro) 为哪吒监控设计的 AngelKanade 主题。

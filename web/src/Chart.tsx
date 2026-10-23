@@ -27,7 +27,7 @@ export function Chart({ title, t, series, formatValue, max }: Props) {
   useEffect(() => {
     const el = container.current
     if (!el) return
-    const muted = getComputedStyle(el).getPropertyValue('--muted').trim() || '#888'
+    const muted = getComputedStyle(el).getPropertyValue('--label').trim() || '#787878'
     const axis = { stroke: muted, grid: { stroke: 'rgba(128,128,128,0.15)' }, ticks: { show: false } }
     plot.current = new uPlot(
       {

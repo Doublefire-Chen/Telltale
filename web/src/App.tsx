@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { getSession, login, logout, type LoginResult, type Session } from './api'
 import { languages } from './i18n'
+import { Icon } from './Icon'
 import { StatusPage } from './StatusPage'
 
 type View = { kind: 'loading' } | { kind: 'error' } | { kind: 'ready'; session: Session }
@@ -38,11 +39,13 @@ export function App() {
           <LanguageToggle />
           {authenticated && (
             <button type="button" className="secondary" onClick={() => void logout().then(refresh)}>
+              <Icon name="box-arrow-right" />
               {t('status.logout')}
             </button>
           )}
           {publicView && (
             <button type="button" className="secondary" onClick={() => setWantsLogin(true)}>
+              <Icon name="box-arrow-in-right" />
               {t('login.open')}
             </button>
           )}
@@ -74,6 +77,10 @@ export function App() {
         {' · '}
         <a href="https://db-ip.com" target="_blank" rel="noreferrer">
           {t('footer.geoip')}
+        </a>
+        {' · '}
+        <a href="https://yujie.pro" target="_blank" rel="noreferrer">
+          {t('footer.theme')}
         </a>
       </footer>
     </>

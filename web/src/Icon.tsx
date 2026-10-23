@@ -1,4 +1,4 @@
-// Bootstrap Icons (MIT), the set Nezha's default theme uses, bundled at build
+// Bootstrap Icons (MIT), the set Nezha's themes use, bundled at build
 // time. Each is drawn as a CSS mask, so it takes the colour of its class.
 const iconUrls = import.meta.glob<string>(
   [
@@ -8,10 +8,12 @@ const iconUrls = import.meta.glob<string>(
     '/node_modules/bootstrap-icons/icons/arrow-up-circle-fill.svg',
     '/node_modules/bootstrap-icons/icons/cpu-fill.svg',
     '/node_modules/bootstrap-icons/icons/memory.svg',
-    '/node_modules/bootstrap-icons/icons/hdd-fill.svg',
+    '/node_modules/bootstrap-icons/icons/hdd-rack-fill.svg',
     '/node_modules/bootstrap-icons/icons/clock-fill.svg',
     '/node_modules/bootstrap-icons/icons/info-circle-fill.svg',
     '/node_modules/bootstrap-icons/icons/gear-fill.svg',
+    '/node_modules/bootstrap-icons/icons/box-arrow-in-right.svg',
+    '/node_modules/bootstrap-icons/icons/box-arrow-right.svg',
   ],
   { query: '?url', import: 'default', eager: true },
 )
@@ -23,10 +25,12 @@ export type IconName =
   | 'arrow-up-circle-fill'
   | 'cpu-fill'
   | 'memory'
-  | 'hdd-fill'
+  | 'hdd-rack-fill'
   | 'clock-fill'
   | 'info-circle-fill'
   | 'gear-fill'
+  | 'box-arrow-in-right'
+  | 'box-arrow-right'
 
 /** Icon is decorative: whatever it stands for must also be said in text. */
 export function Icon({ name, className = '' }: { name: IconName; className?: string }) {

@@ -1,24 +1,39 @@
 import { unknown } from './format'
 
 // Vendored flag-icons SVGs (MIT), bundled at build time; no CDN at runtime.
-const flagUrls = import.meta.glob<string>('/node_modules/flag-icons/flags/4x3/*.svg', {
+const flagUrls = import.meta.glob<string>(['/node_modules/flag-icons/flags/4x3/*.svg', '/node_modules/flag-icons/flags/1x1/*.svg'], {
   query: '?url',
   import: 'default',
   eager: true,
 })
 
-function flagUrl(code: string): string | undefined {
-  return flagUrls[`/node_modules/flag-icons/flags/4x3/${code.toLowerCase()}.svg`]
+type Shape = '4x3' | '1x1'
+
+function flagUrl(code: string, shape: Shape = '4x3'): string | undefined {
+  return flagUrls[`/node_modules/flag-icons/flags/${shape}/${code.toLowerCase()}.svg`]
 }
 
-/** Flags shows one SVG flag per ISO country code, or a neutral globe when there are none. */
-export function Flags({ countries }: { countries: string[] }) {
-  const known = countries.filter((c) => flagUrl(c))
+/**
+ * Flags shows one SVG flag per ISO country code, or a neutral globe when
+ * there are none. Round flags (on the Status page's cards) use the square
+ * artwork, clipped to a circle.
+ */
+export function Flags({ countries, round = false }: { countries: string[]; round?: boolean }) {
+  const shape: Shape = round ? '1x1' : '4x3'
+  const known = countries.filter((c) => flagUrl(c, shape))
   if (known.length === 0) return <Globe />
   return (
     <span className="flags">
       {known.map((c) => (
-        <img key={c} className="flag" src={flagUrl(c)} alt={c} title={c} width={20} height={15} />
+        <img
+          key={c}
+          className={round ? 'flag round' : 'flag'}
+          src={flagUrl(c, shape)}
+          alt={c}
+          title={c}
+          width={round ? 19 : 20}
+          height={round ? 19 : 15}
+        />
       ))}
     </span>
   )
