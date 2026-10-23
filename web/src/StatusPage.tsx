@@ -1,4 +1,4 @@
-import { type FormEvent, Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   type AddedHost,
@@ -17,6 +17,7 @@ import { Flags } from './Flag'
 import { formatBytes, formatLoad, formatPercent, formatRate, formatUsage, unknown, uptimeParts } from './format'
 import { HostDetail } from './HostDetail'
 import { HostSettings } from './HostSettings'
+import { OsLogo } from './OsLogo'
 import { hostHref, useRoute } from './route'
 import { TokenReveal } from './TokenReveal'
 
@@ -73,11 +74,11 @@ export function StatusPage({ admin, onUnauthorized }: StatusPageProps) {
   }
   return (
     <section className="stack">
-      <h1>{t('status.title')}</h1>
+      <h1 className="visually-hidden">{t('status.title')}</h1>
       {hosts.length === 0 ? (
         <p className="muted">{t('status.empty')}</p>
       ) : (
-        <HostTable
+        <HostGroups
           hosts={hosts}
           dashboardVersion={dashboardVersion}
           onChanged={load}
@@ -85,8 +86,12 @@ export function StatusPage({ admin, onUnauthorized }: StatusPageProps) {
           onOpen={(id) => navigate(hostHref(id))}
         />
       )}
-      {admin && <AddHost onAdded={load} />}
-      {admin && <DashboardSettings />}
+      {admin && (
+        <div className="admin-panels">
+          <AddHost onAdded={load} />
+          <DashboardSettings />
+        </div>
+      )}
     </section>
   )
 }
@@ -122,7 +127,7 @@ function useLiveUpdates(load: () => Promise<void>, onMessage: (msg: LiveMessage)
   }, [load])
 }
 
-type HostTableProps = {
+type HostGroupsProps = {
   hosts: Host[]
   dashboardVersion: string
   onChanged: () => Promise<void>
@@ -144,9 +149,11 @@ function byGroup(hosts: Host[]): { group: string; hosts: Host[] }[] {
   return groups
 }
 
-function HostTable({ hosts, dashboardVersion, onChanged, admin, onOpen }: HostTableProps) {
+/** HostGroups shows a collapsible panel of Host cards per group. */
+function HostGroups({ hosts, dashboardVersion, onChanged, admin, onOpen }: HostGroupsProps) {
   const { t } = useTranslation()
   const [openSettings, setOpenSettings] = useState<string | null>(null)
+  const settingsRef = useRef<HTMLDivElement>(null)
   const now = Date.now()
   const groups = byGroup(hosts)
   // Moving swaps a Host with its neighbour as displayed, then saves that order.
@@ -165,115 +172,125 @@ function HostTable({ hosts, dashboardVersion, onChanged, admin, onOpen }: HostTa
   const editing = displayed.find((h) => h.id === openSettings)
   const editingIndex = editing ? displayed.indexOf(editing) : -1
 
+  useEffect(() => {
+    if (openSettings) settingsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }, [openSettings])
+
   return (
     <>
-      <div className="table-scroll">
-        <table className="hosts">
-          <thead>
-            <tr>
-              <th scope="col">{t('status.name')}</th>
-              {admin && <th scope="col">{t('status.ip')}</th>}
-              <th scope="col">{t('status.system')}</th>
-              <th scope="col">{t('status.uptime')}</th>
-              <th scope="col">{t('status.cpu')}</th>
-              <th scope="col">{t('status.load')}</th>
-              <th scope="col">{t('status.memory')}</th>
-              <th scope="col">{t('status.swap')}</th>
-              <th scope="col">{t('status.disk')}</th>
-              <th scope="col">{t('status.bandwidth')}</th>
-              <th scope="col">{t('status.traffic')}</th>
-              {admin && (
-                <th scope="col">
-                  <span className="visually-hidden">{t('hostSettings.save')}</span>
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map((g) => (
-              <Fragment key={g.group}>
-                {g.group && (
-                  <tr className="group-row">
-                    <th scope="colgroup" colSpan={admin ? adminColumns : publicColumns}>
-                      {g.group}
-                    </th>
-                  </tr>
-                )}
-                {g.hosts.map((h) => (
-                  <HostRow
-                    key={h.id}
-                    host={h}
-                    dashboardVersion={dashboardVersion}
-                    now={now}
-                    admin={admin}
-                    onOpen={() => onOpen(h.id)}
-                    open={openSettings === h.id}
-                    onToggle={() => setOpenSettings(openSettings === h.id ? null : h.id)}
-                  />
-                ))}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
       {editing && (
-        <HostSettings
-          key={editing.id}
-          host={editing}
-          displayName={displayName(editing, t('status.unnamed'))}
-          canMoveUp={editingIndex > 0}
-          canMoveDown={editingIndex < displayed.length - 1}
-          onMove={(direction) => move(editing.id, direction)}
-          onClose={() => setOpenSettings(null)}
-          onChanged={onChanged}
-        />
+        <div ref={settingsRef} className="settings-anchor">
+          <HostSettings
+            key={editing.id}
+            host={editing}
+            displayName={displayName(editing, t('status.unnamed'))}
+            canMoveUp={editingIndex > 0}
+            canMoveDown={editingIndex < displayed.length - 1}
+            onMove={(direction) => move(editing.id, direction)}
+            onClose={() => setOpenSettings(null)}
+            onChanged={onChanged}
+          />
+        </div>
       )}
+      {groups.map((g) => (
+        <details key={g.group} className="group" open>
+          <summary>
+            <h2>{g.group || t('status.defaultGroup')}</h2>
+            <span className="group-count">{g.hosts.length}</span>
+          </summary>
+          <div className="host-cards">
+            {g.hosts.map((h) => (
+              <HostCard
+                key={h.id}
+                host={h}
+                dashboardVersion={dashboardVersion}
+                now={now}
+                admin={admin}
+                onOpen={() => onOpen(h.id)}
+                settingsOpen={openSettings === h.id}
+                onToggleSettings={() => setOpenSettings(openSettings === h.id ? null : h.id)}
+              />
+            ))}
+          </div>
+        </details>
+      ))}
     </>
   )
 }
 
-type HostRowProps = {
+type HostCardProps = {
   host: Host
   dashboardVersion: string
   now: number
   admin: boolean
   onOpen: () => void
-  open: boolean
-  onToggle: () => void
+  settingsOpen: boolean
+  onToggleSettings: () => void
 }
-
-const adminColumns = 12
-const publicColumns = 10
 
 /** displayName is what the Status page calls a Host: its name, else its hostname. */
 function displayName(h: Host, unnamed: string): string {
   return h.name || h.host_info?.hostname || unnamed
 }
 
-function HostRow({ host: h, dashboardVersion, now, admin, onOpen, open, onToggle }: HostRowProps) {
+function HostCard({ host: h, dashboardVersion, now, admin, onOpen, settingsOpen, onToggleSettings }: HostCardProps) {
   const { t, i18n } = useTranslation()
   const lang = i18n.resolvedLanguage ?? 'en'
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const r = h.report
   const info = h.host_info
   const name = displayName(h, t('status.unnamed'))
   const state = h.online ? 'online' : h.report ? 'offline' : 'waiting'
+  const live = state === 'online'
+  const nameId = `host-${h.id}`
+  const detailsId = `host-details-${h.id}`
   return (
-    <>
-      <tr className={state === 'offline' ? 'offline' : undefined}>
-        <th scope="row">
-          <span className={`dot ${state}`} role="img" aria-label={t(`status.${state}`)} title={t(`status.${state}`)} />
-          <Flags countries={h.countries} />
-          <a
-            className="host-name"
-            href={hostHref(h.id)}
-            onClick={(e) => {
-              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-              e.preventDefault()
-              onOpen()
-            }}
+    <article className={`host-card ${state}`} aria-labelledby={nameId}>
+      <header className="host-card-header">
+        <Flags countries={h.countries} />
+        <OsLogo info={info} />
+        <a
+          id={nameId}
+          className="host-name"
+          href={hostHref(h.id)}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+            e.preventDefault()
+            onOpen()
+          }}
+        >
+          {name}
+        </a>
+        <span className={`state ${state}`} role="img" aria-label={t(`status.${state}`)} title={t(`status.${state}`)}>
+          {state !== 'online' && t(`status.${state}Short`)}
+        </span>
+        <span className="spacer" />
+        <button
+          type="button"
+          className="card-icon"
+          aria-expanded={detailsOpen}
+          aria-controls={detailsId}
+          aria-label={t('status.details', { name })}
+          title={t('status.details', { name })}
+          onClick={() => setDetailsOpen(!detailsOpen)}
+        >
+          <InfoIcon />
+        </button>
+        {admin && (
+          <button
+            type="button"
+            className="card-icon"
+            aria-expanded={settingsOpen}
+            aria-label={t('status.settings', { name })}
+            title={t('status.settings', { name })}
+            onClick={onToggleSettings}
           >
-            {name}
-          </a>
+            <GearIcon />
+          </button>
+        )}
+      </header>
+      {(h.hidden || h.agent_outdated) && (
+        <div className="tags">
           {h.hidden && <span className="tag">{t('status.hiddenTag')}</span>}
           {h.agent_outdated && (
             <span
@@ -283,45 +300,146 @@ function HostRow({ host: h, dashboardVersion, now, admin, onOpen, open, onToggle
               {t('status.outdated')}
             </span>
           )}
-        </th>
-        {admin && (
-          <td>
-            <span className="in-out">
-              <span>{h.ipv4 || unknown}</span>
-              <span>{h.ipv6 || unknown}</span>
-            </span>
-          </td>
-        )}
-        <td>{systemSummary(info)}</td>
-        <td>
-          <Uptime bootTime={info?.boot_time} now={now} />
-        </td>
-        <td>{formatPercent(r?.cpu_percent, lang)}</td>
-        <td>{formatLoad([r?.load1, r?.load5, r?.load15], lang)}</td>
-        <td>{formatUsage(r?.memory_used, info?.memory_total, lang)}</td>
-        <td>{formatUsage(r?.swap_used, info?.swap_total, lang)}</td>
-        <td>{formatUsage(r?.disk_used, info?.disk_total, lang)}</td>
-        <td>
+        </div>
+      )}
+      {detailsOpen && (
+        <dl id={detailsId} className="host-details">
+          {admin && (
+            <>
+              <dt>IPv4</dt>
+              <dd>{h.ipv4 || unknown}</dd>
+              <dt>IPv6</dt>
+              <dd>{h.ipv6 || unknown}</dd>
+            </>
+          )}
+          <dt>{t('status.processes')}</dt>
+          <dd>{r?.process_count ?? unknown}</dd>
+          <dt>{t('status.connections')}</dt>
+          <dd>
+            {r?.tcp_connections === undefined && r?.udp_connections === undefined
+              ? unknown
+              : `TCP ${r?.tcp_connections ?? unknown} · UDP ${r?.udp_connections ?? unknown}`}
+          </dd>
+          <dt>{t('status.kernel')}</dt>
+          <dd>{info?.kernel_version || unknown}</dd>
+          <dt>{t('status.cpuModel')}</dt>
+          <dd>{info?.cpu_model || unknown}</dd>
+          <dt>{t('status.bootTime')}</dt>
+          <dd>
+            {info?.boot_time === undefined
+              ? unknown
+              : new Date(info.boot_time * 1000).toLocaleString(lang, { dateStyle: 'medium', timeStyle: 'short' })}
+          </dd>
+          <dt>{t('status.agentVersion')}</dt>
+          <dd>{info?.agent_version || unknown}</dd>
+        </dl>
+      )}
+      <dl className="metrics">
+        <dt>{t('status.cpu')}</dt>
+        <dd>
+          <UsageBar label={t('status.cpu')} percent={r?.cpu_percent} live={live} />
+          <span className="usage">{info?.cpu_cores ? t('status.cores', { count: info.cpu_cores }) : ''}</span>
+        </dd>
+        <dt>{t('status.memory')}</dt>
+        <dd>
+          <UsageBar label={t('status.memory')} percent={ratio(r?.memory_used, info?.memory_total)} live={live} />
+          <span className="usage">{formatUsage(r?.memory_used, info?.memory_total, lang)}</span>
+        </dd>
+        <dt>{t('status.swap')}</dt>
+        <dd>
+          {info?.swap_total === 0 ? (
+            <>
+              <UsageBar label={t('status.swap')} percent={undefined} live={live} text={t('status.off')} />
+              <span className="usage" />
+            </>
+          ) : (
+            <>
+              <UsageBar label={t('status.swap')} percent={ratio(r?.swap_used, info?.swap_total)} live={live} />
+              <span className="usage">{formatUsage(r?.swap_used, info?.swap_total, lang)}</span>
+            </>
+          )}
+        </dd>
+        <dt>{t('status.disk')}</dt>
+        <dd>
+          <UsageBar label={t('status.disk')} percent={ratio(r?.disk_used, info?.disk_total)} live={live} />
+          <span className="usage">{formatUsage(r?.disk_used, info?.disk_total, lang)}</span>
+        </dd>
+        <dt>{t('status.bandwidth')}</dt>
+        <dd>
           <InOut inValue={formatRate(r?.rx_rate, lang)} outValue={formatRate(r?.tx_rate, lang)} />
-        </td>
-        <td>
+        </dd>
+        <dt>{t('status.traffic')}</dt>
+        <dd>
           <InOut inValue={formatBytes(r?.net_rx_bytes, lang)} outValue={formatBytes(r?.net_tx_bytes, lang)} />
-        </td>
-        {admin && (
-          <td>
-            <button
-              type="button"
-              className="secondary icon"
-              aria-expanded={open}
-              aria-label={t('status.settings', { name })}
-              onClick={onToggle}
-            >
-              ⋯
-            </button>
-          </td>
-        )}
-      </tr>
-    </>
+        </dd>
+        <dt>{t('status.system')}</dt>
+        <dd className="text">{systemSummary(info)}</dd>
+        <dt>{t('status.load')}</dt>
+        <dd className="text">{formatLoad([r?.load1, r?.load5, r?.load15], lang)}</dd>
+        <dt>{t('status.uptime')}</dt>
+        <dd className="text">
+          <Uptime bootTime={info?.boot_time} now={now} />
+        </dd>
+      </dl>
+    </article>
+  )
+}
+
+/** ratio is used as a percentage of total, or undefined while either is unknown. */
+function ratio(used: number | undefined, total: number | undefined): number | undefined {
+  if (used === undefined || !total) return undefined
+  return (used / total) * 100
+}
+
+/** level colours a usage bar: blue up to half, orange up to 80%, red above. */
+function level(percent: number): 'fine' | 'warning' | 'critical' {
+  if (percent < 51) return 'fine'
+  if (percent < 81) return 'warning'
+  return 'critical'
+}
+
+/** UsageBar is a meter that turns orange and red as it fills, and grey while Offline. */
+function UsageBar({ label, percent, live, text }: { label: string; percent: number | undefined; live: boolean; text?: string }) {
+  const { i18n } = useTranslation()
+  const lang = i18n.resolvedLanguage ?? 'en'
+  const clamped = percent === undefined ? undefined : Math.min(100, Math.max(0, percent))
+  const shown = text ?? (clamped === undefined ? unknown : formatPercent(Math.round(clamped), lang))
+  return (
+    <div
+      className={`bar ${clamped === undefined ? 'empty' : live ? level(clamped) : 'stale'}${clamped !== undefined && clamped >= 85 ? ' full' : ''}`}
+      role="meter"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={clamped}
+      aria-valuetext={shown}
+    >
+      <div className="bar-fill" style={{ width: `${clamped ?? 0}%` }} />
+      <span className="bar-text">{shown}</span>
+    </div>
+  )
+}
+
+function InfoIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width={16} height={16} aria-hidden="true">
+      <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M8 7v4.5M8 4.6v.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function GearIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width={16} height={16} aria-hidden="true">
+      <circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
   )
 }
 
@@ -348,12 +466,12 @@ function InOut({ inValue, outValue }: { inValue: string; outValue: string }) {
   return (
     <span className="in-out">
       <span>
-        <span aria-hidden="true">↓ </span>
+        <span aria-hidden="true" className="arrow">↓</span>
         <span className="visually-hidden">{t('status.in')} </span>
         {inValue}
       </span>
       <span>
-        <span aria-hidden="true">↑ </span>
+        <span aria-hidden="true" className="arrow">↑</span>
         <span className="visually-hidden">{t('status.out')} </span>
         {outValue}
       </span>

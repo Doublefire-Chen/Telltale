@@ -7,9 +7,9 @@ export default defineConfig({
   build: {
     outDir: 'dist/app',
     emptyOutDir: true,
-    // Emit every flag as its own file so browsers fetch only the flags shown,
-    // instead of inlining small ones into the JS bundle.
-    assetsInlineLimit: (file) => (file.includes('flag-icons') ? false : undefined),
+    // Emit every flag and OS logo as its own file so browsers fetch only the
+    // ones shown, instead of inlining small ones into the JS bundle.
+    assetsInlineLimit: (file) => (file.includes('flag-icons') || file.includes('font-logos') ? false : undefined),
   },
   server: {
     proxy: {

@@ -30,6 +30,7 @@ const hostInfo: HostInfo = {
   platform_version: '24.04',
   arch: 'x86_64',
   virtualization: 'kvm',
+  cpu_cores: 2,
   memory_total: 2 * 1024 ** 3,
   swap_total: 1024 ** 3,
   disk_total: 50 * 1024 ** 3,
@@ -52,14 +53,14 @@ function host(h: Partial<Host> & Pick<Host, 'id'>): Host {
   }
 }
 
-function row(name: string) {
-  return screen.getByRole('rowheader', { name: new RegExp(name) }).closest('tr')!
+function card(name: string) {
+  return screen.getByRole('article', { name: new RegExp(name) })
 }
 
-function cells(name: string) {
-  return within(row(name))
-    .getAllByRole('cell')
-    .map((c) => c.textContent)
+/** metric is the text shown for a labelled metric on a Host's card. */
+function metric(name: string, label: string) {
+  const dt = within(card(name)).getAllByText(label).find((e) => e.tagName === 'DT')!
+  return dt.nextElementSibling!.textContent
 }
 
 describe('Status page', () => {
@@ -74,12 +75,16 @@ describe('Status page', () => {
   it('shows "—" for everything before a Host has reported', async () => {
     stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'new-box' })] })
     render(<App />)
-    await screen.findByRole('rowheader', { name: /new-box/ })
-    // IPv4/IPv6, System, Uptime, CPU, load, memory, swap, disk, and in/out for Bandwidth and Traffic.
-    expect(within(row('new-box')).getAllByText(/^—$|—$/)).toHaveLength(13)
+    await screen.findByRole('article', { name: /new-box/ })
+    for (const label of ['CPU', 'Memory', 'Swap', 'Disk']) {
+      expect(within(card('new-box')).getByRole('meter', { name: label }).getAttribute('aria-valuetext')).toBe('—')
+    }
+    expect(metric('new-box', 'Bandwidth')).toBe('↓In —↑Out —')
+    expect(metric('new-box', 'System')).toBe('—')
+    expect(metric('new-box', 'Uptime')).toBe('—')
     // No country yet: a neutral globe instead of a flag.
-    expect(within(row('new-box')).getByRole('img', { name: '—' })).toBeTruthy()
-    expect(within(row('new-box')).getByRole('img', { name: 'Waiting for the first Report' })).toBeTruthy()
+    expect(within(card('new-box')).getByRole('img', { name: '—' })).toBeTruthy()
+    expect(within(card('new-box')).getByRole('img', { name: 'Waiting for the first Report' })).toBeTruthy()
   })
 
   it('shows every metric, using Host Info for totals, system and Uptime', async () => {
@@ -91,6 +96,7 @@ describe('Status page', () => {
           name: 'tokyo',
           host_info: hostInfo,
           report: fullReport,
+          online: true,
           ipv4: '203.0.113.7',
           ipv6: '2001:db8::7',
           countries: ['JP'],
@@ -98,20 +104,59 @@ describe('Status page', () => {
       ],
     })
     render(<App />)
-    await screen.findByRole('rowheader', { name: /tokyo/ })
+    await screen.findByRole('article', { name: /tokyo/ })
 
-    expect(cells('tokyo').slice(0, -1)).toEqual([
-      '203.0.113.72001:db8::7',
-      'ubuntu 24.04 · x86_64 · kvm',
-      '3d 4h',
-      '37.5%',
-      '0.50 0.25 1.00',
-      '1.5 GiB / 2.0 GiB',
-      '0 B / 1.0 GiB',
-      '40.0 GiB / 50.0 GiB',
-      '↓ In 2.0 KiB/s↑ Out 0 B/s',
-      '↓ In 3.0 TiB↑ Out 512.0 MiB',
-    ])
+    const meter = (label: string) => within(card('tokyo')).getByRole('meter', { name: label })
+    expect(meter('CPU').getAttribute('aria-valuetext')).toBe('38%')
+    expect(meter('Memory').getAttribute('aria-valuenow')).toBe('75')
+    expect(meter('Memory').className).toContain('warning')
+    expect(meter('Swap').getAttribute('aria-valuetext')).toBe('0%')
+    expect(meter('Disk').className).toContain('warning')
+    expect(metric('tokyo', 'CPU')).toBe('38%2 cores')
+    expect(metric('tokyo', 'Memory')).toBe('75%1.5 GiB / 2.0 GiB')
+    expect(metric('tokyo', 'Disk')).toBe('80%40.0 GiB / 50.0 GiB')
+    expect(metric('tokyo', 'Bandwidth')).toBe('↓In 2.0 KiB/s↑Out 0 B/s')
+    expect(metric('tokyo', 'Traffic')).toBe('↓In 3.0 TiB↑Out 512.0 MiB')
+    expect(metric('tokyo', 'System')).toBe('ubuntu 24.04 · x86_64 · kvm')
+    expect(metric('tokyo', 'Load')).toBe('0.50 0.25 1.00')
+    expect(metric('tokyo', 'Uptime')).toBe('3d 4h')
+    expect(within(card('tokyo')).getByRole('img', { name: 'ubuntu 24.04' })).toBeTruthy()
+  })
+
+  it('shows IPs, processes and connections in the details panel', async () => {
+    vi.useRealTimers()
+    const user = userEvent.setup()
+    stubDashboard({
+      authenticated: true,
+      hosts: [
+        host({
+          id: 'h1',
+          name: 'tokyo',
+          host_info: hostInfo,
+          report: { ...fullReport, process_count: 187, tcp_connections: 42, udp_connections: 9 },
+          ipv4: '203.0.113.7',
+          ipv6: '2001:db8::7',
+        }),
+      ],
+    })
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Details for tokyo' }))
+    expect(metric('tokyo', 'IPv4')).toBe('203.0.113.7')
+    expect(metric('tokyo', 'IPv6')).toBe('2001:db8::7')
+    expect(metric('tokyo', 'Processes')).toBe('187')
+    expect(metric('tokyo', 'Connections')).toBe('TCP 42 · UDP 9')
+    expect(metric('tokyo', 'Agent')).toBe('v1.1.0')
+  })
+
+  it('shows Swap as off when the Host has none, and greys bars while Offline', async () => {
+    stubDashboard({
+      authenticated: true,
+      hosts: [host({ id: 'h1', name: 'tokyo', host_info: { ...hostInfo, swap_total: 0 }, report: fullReport })],
+    })
+    render(<App />)
+    await screen.findByRole('article', { name: /tokyo/ })
+    expect(within(card('tokyo')).getByRole('meter', { name: 'Swap' }).getAttribute('aria-valuetext')).toBe('Off')
+    expect(within(card('tokyo')).getByRole('meter', { name: 'CPU' }).className).toContain('stale')
   })
 
   it('falls back to the hostname when the Host has no display name', async () => {
@@ -120,8 +165,8 @@ describe('Status page', () => {
       hosts: [host({ id: 'h1', host_info: hostInfo }), host({ id: 'h2' })],
     })
     render(<App />)
-    expect(await screen.findByRole('rowheader', { name: /vps-tokyo/ })).toBeTruthy()
-    expect(screen.getByRole('rowheader', { name: /Unnamed Host/ })).toBeTruthy()
+    expect(await screen.findByRole('article', { name: /vps-tokyo/ })).toBeTruthy()
+    expect(screen.getByRole('article', { name: /Unnamed Host/ })).toBeTruthy()
   })
 
   it('flags Hosts whose Agent is older than the Dashboard', async () => {
@@ -133,11 +178,11 @@ describe('Status page', () => {
       ],
     })
     render(<App />)
-    await screen.findByRole('rowheader', { name: /old/ })
+    await screen.findByRole('article', { name: /old/ })
 
-    const badge = within(row('old')).getByText('Agent outdated')
+    const badge = within(card('old')).getByText('Agent outdated')
     expect(badge.getAttribute('title')).toBe('Agent v1.1.0 is older than Dashboard v1.2.0. Upgrade it on the Host.')
-    expect(within(row('current')).queryByText('Agent outdated')).toBeNull()
+    expect(within(card('current')).queryByText('Agent outdated')).toBeNull()
   })
 
   it('formats Uptime in hours and minutes for recently booted Hosts', async () => {
@@ -149,9 +194,9 @@ describe('Status page', () => {
       ],
     })
     render(<App />)
-    await screen.findByRole('rowheader', { name: /hours/ })
-    expect(cells('hours')[2]).toBe('2h 7m')
-    expect(cells('minutes')[2]).toBe('9m')
+    await screen.findByRole('article', { name: /hours/ })
+    expect(metric('hours', 'Uptime')).toBe('2h 7m')
+    expect(metric('minutes', 'Uptime')).toBe('9m')
   })
 
   it('shows SVG flags: one per country, with the ISO code as alt text', async () => {
@@ -163,13 +208,13 @@ describe('Status page', () => {
       ],
     })
     render(<App />)
-    await screen.findByRole('rowheader', { name: /one/ })
+    await screen.findByRole('article', { name: /one/ })
 
-    const jp = within(row('one')).getByRole('img', { name: 'JP' })
+    const jp = within(card('one')).getByRole('img', { name: 'JP' })
     expect(jp.tagName).toBe('IMG')
     expect(jp.getAttribute('src')).toMatch(/jp\.svg/)
     expect(jp.getAttribute('title')).toBe('JP')
-    const flags = [...row('two').querySelectorAll('img.flag')].map((i) => i.getAttribute('alt'))
+    const flags = [...card('two').querySelectorAll('img.flag')].map((i) => i.getAttribute('alt'))
     expect(flags).toEqual(['US', 'DE'])
   })
 
@@ -185,7 +230,7 @@ describe('Status page', () => {
     expect((input as HTMLInputElement).value).toBe('JP')
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(dash.requests.at(-1)?.body).toMatchObject({ country_override: 'JP' })
-    expect(await within(row('anycast')).findByRole('img', { name: 'JP' })).toBeTruthy()
+    expect(await within(card('anycast')).findByRole('img', { name: 'JP' })).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Settings for anycast' }))
     await user.clear(screen.getByLabelText(/Country override/))
@@ -216,8 +261,8 @@ describe('Status page', () => {
       path: '/api/hosts/h1',
       body: { name: 'Tokyo', group: 'Asia', hidden: true },
     })
-    expect(await screen.findByRole('columnheader', { name: 'Asia' })).toBeTruthy()
-    expect(within(row('Tokyo')).getByText('Hidden')).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'Asia' })).toBeTruthy()
+    expect(within(card('Tokyo')).getByText('Hidden')).toBeTruthy()
   })
 
   it('reorders Hosts in the order they are shown', async () => {
@@ -234,8 +279,8 @@ describe('Status page', () => {
     await user.click(screen.getByRole('button', { name: 'Move up' }))
     expect(dash.requests.at(-1)).toMatchObject({ method: 'PUT', body: { ids: ['a', 'c', 'b'] } })
 
-    await screen.findByRole('rowheader', { name: /charlie/ })
-    const order = screen.getAllByRole('rowheader').map((r) => r.textContent?.replace(/^—/, ''))
+    await screen.findByRole('article', { name: /charlie/ })
+    const order = screen.getAllByRole('article').map((a) => a.querySelector('.host-name')!.textContent)
     expect(order).toEqual(['alpha', 'charlie', 'bravo'])
   })
 
@@ -271,36 +316,38 @@ describe('Status page', () => {
     await user.click(screen.getByRole('button', { name: 'Delete permanently' }))
 
     expect(dash.requests.at(-1)).toMatchObject({ method: 'DELETE', path: '/api/hosts/h1' })
-    await waitFor(() => expect(screen.queryByRole('rowheader', { name: /old-box/ })).toBeNull())
-    expect(screen.getByRole('rowheader', { name: /keeper/ })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('article', { name: /old-box/ })).toBeNull())
+    expect(screen.getByRole('article', { name: /keeper/ })).toBeTruthy()
   })
 
   it('updates live from the WebSocket without reloading', async () => {
     stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'tokyo', report, online: true })] })
     render(<App />)
-    await screen.findByText('37.5%')
-    expect(within(row('tokyo')).getByRole('img', { name: 'Online' })).toBeTruthy()
+    await screen.findByRole('article', { name: /tokyo/ })
+    expect(within(card('tokyo')).getByRole('img', { name: 'Online' })).toBeTruthy()
 
     const socket = FakeWebSocket.instances.at(-1)!
     expect(socket.url).toMatch(/\/api\/live$/)
     act(() => socket.emit({ type: 'report', host_id: 'h1', report: { ...report, cpu_percent: 81 } }))
-    expect(await screen.findByText('81%')).toBeTruthy()
+    await waitFor(() =>
+      expect(within(card('tokyo')).getByRole('meter', { name: 'CPU' }).getAttribute('aria-valuetext')).toBe('81%'),
+    )
   })
 
   it('shows a Host going Offline and coming back, live', async () => {
     stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'tokyo', report, online: true })] })
     render(<App />)
-    await screen.findByText('37.5%')
+    await screen.findByRole('article', { name: /tokyo/ })
     const socket = FakeWebSocket.instances.at(-1)!
 
     act(() => socket.emit({ type: 'offline', host_id: 'h1' }))
-    expect(within(row('tokyo')).getByRole('img', { name: 'Offline' })).toBeTruthy()
-    expect(row('tokyo').className).toBe('offline')
+    expect(within(card('tokyo')).getByRole('img', { name: 'Offline' })).toBeTruthy()
+    expect(card('tokyo').className).toContain('offline')
     // The last known values stay visible, dimmed.
-    expect(within(row('tokyo')).getByText('37.5%')).toBeTruthy()
+    expect(within(card('tokyo')).getByRole('meter', { name: 'CPU' }).getAttribute('aria-valuetext')).toBe('38%')
 
     act(() => socket.emit({ type: 'report', host_id: 'h1', report }))
-    expect(within(row('tokyo')).getByRole('img', { name: 'Online' })).toBeTruthy()
+    expect(within(card('tokyo')).getByRole('img', { name: 'Online' })).toBeTruthy()
   })
 
   it('adds a Host and shows its token exactly once as an Agent config', async () => {
@@ -315,7 +362,7 @@ describe('Status page', () => {
     expect(await screen.findByRole('heading', { name: 'Host “Tokyo-Vultr” added' })).toBeTruthy()
     const config = screen.getByText(/token = "tt_A+"/)
     expect(config.textContent).toContain(`dashboard_url = "${location.origin}"`)
-    expect(await screen.findByRole('rowheader', { name: /Tokyo-Vultr/ })).toBeTruthy()
+    expect(await screen.findByRole('article', { name: /Tokyo-Vultr/ })).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Done' }))
     expect(screen.queryByText(/tt_A+/)).toBeNull()
@@ -335,8 +382,9 @@ describe('Status page', () => {
     stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'tokyo', host_info: hostInfo, report })] })
     await i18n.changeLanguage('zh-CN')
     render(<App />)
-    expect(await screen.findByRole('columnheader', { name: '内存' })).toBeTruthy()
+    await screen.findByRole('article', { name: /tokyo/ })
+    expect(within(card('tokyo')).getByRole('meter', { name: '内存' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: '添加主机' })).toBeTruthy()
-    expect(cells('tokyo')[2]).toBe('3天4小时')
+    expect(metric('tokyo', '运行时间')).toBe('3天4小时')
   })
 })

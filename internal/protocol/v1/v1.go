@@ -46,6 +46,13 @@ type Report struct {
 	// summed over the network interfaces the Agent is configured to count.
 	NetRxBytes *uint64 `json:"net_rx_bytes,omitempty"`
 	NetTxBytes *uint64 `json:"net_tx_bytes,omitempty"`
+	// ProcessCount is the number of processes running on the Host.
+	ProcessCount *uint64 `json:"process_count,omitempty"`
+	// TCPConnections and UDPConnections count open TCP and UDP sockets, IPv4
+	// and IPv6 together. Agents send them where they can be counted cheaply
+	// (Linux, Windows).
+	TCPConnections *uint64 `json:"tcp_connections,omitempty"`
+	UDPConnections *uint64 `json:"udp_connections,omitempty"`
 }
 
 // HostInfo is the static description of a Host. Agents send it at start,

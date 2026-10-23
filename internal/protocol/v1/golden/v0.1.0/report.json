@@ -9,5 +9,8 @@
   "load15": 3.33642578125,
   "disk_used": 471005962240,
   "net_rx_bytes": 939544218410,
-  "net_tx_bytes": 43795216392
+  "net_tx_bytes": 43795216392,
+  "process_count": 187,
+  "tcp_connections": 42,
+  "udp_connections": 9
 }

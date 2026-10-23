@@ -67,7 +67,11 @@ export function App() {
         )}
         {(authenticated || publicView) && <StatusPage key={String(authenticated)} admin={authenticated} onUnauthorized={refresh} />}
       </main>
-      <footer className="footer muted">
+      <footer className="footer">
+        <a href="https://github.com/Doublefire-Chen/Telltale" target="_blank" rel="noreferrer">
+          {t('footer.poweredBy')}
+        </a>
+        {' · '}
         <a href="https://db-ip.com" target="_blank" rel="noreferrer">
           {t('footer.geoip')}
         </a>

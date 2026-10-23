@@ -13,6 +13,7 @@ import (
 	"github.com/shirou/gopsutil/v4/load"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/net"
+	"github.com/shirou/gopsutil/v4/process"
 
 	v1 "github.com/Doublefire-Chen/Telltale/internal/protocol/v1"
 )
@@ -80,6 +81,11 @@ func (c SystemCollector) Sample(ctx context.Context) v1.Report {
 	}
 	r.DiskUsed, _ = diskUsage(ctx)
 	r.NetRxBytes, r.NetTxBytes = c.traffic(ctx)
+	if pids, err := process.PidsWithContext(ctx); err == nil {
+		n := uint64(len(pids))
+		r.ProcessCount = &n
+	}
+	r.TCPConnections, r.UDPConnections = connections(ctx)
 	return r
 }
 

@@ -19,9 +19,10 @@ upstream release can never break your fleet on its own. See
 
 ## Features
 
-- **Live Status page**: every Host with its flag, system, uptime, CPU, load,
-  memory, swap, disk, Bandwidth and Traffic, updating as Reports arrive (every
-  2 seconds by default); Offline within three missed intervals.
+- **Live Status page**: a card per Host with its flag and OS logo, usage bars
+  for CPU, memory, swap and disk, Bandwidth, Traffic, load, uptime, and process
+  and connection counts, updating as Reports arrive (every 2 seconds by
+  default); Offline within three missed intervals.
 - **History**: charts for 1 hour, 24 hours, 7 days and 30 days, kept in
   SQLite as raw Reports, 1-minute and 15-minute averages.
 - **Both IP addresses** of each Host and their countries, learned from the
@@ -167,4 +168,5 @@ signs and publishes everything.
 ## License
 
 GPL-3.0. IP geolocation by [DB-IP](https://db-ip.com) (CC BY 4.0). Flags from
-[flag-icons](https://github.com/lipis/flag-icons) (MIT).
+[flag-icons](https://github.com/lipis/flag-icons) (MIT), OS logos from
+[font-logos](https://github.com/Lukas-W/font-logos) (public domain).

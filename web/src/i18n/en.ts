@@ -50,6 +50,20 @@ export const en = {
     offline: 'Offline',
     waiting: 'Waiting for the first Report',
     hiddenTag: 'Hidden',
+    onlineShort: 'Online',
+    offlineShort: 'Offline',
+    waitingShort: 'Waiting',
+    defaultGroup: 'Default',
+    details: 'Details for {{name}}',
+    processes: 'Processes',
+    connections: 'Connections',
+    kernel: 'Kernel',
+    cpuModel: 'CPU model',
+    bootTime: 'Booted',
+    agentVersion: 'Agent',
+    cores_one: '{{count}} core',
+    cores_other: '{{count}} cores',
+    off: 'Off',
   },
   addHost: {
     title: 'Add Host',
@@ -96,6 +110,7 @@ export const en = {
     noData: 'No history for this range yet.',
   },
   footer: {
+    poweredBy: 'Powered by Telltale',
     geoip: 'IP geolocation by DB-IP',
   },
 } as const

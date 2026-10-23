@@ -73,6 +73,12 @@ func TestSystemCollectorSmoke(t *testing.T) {
 	if r.NetRxBytes == nil || r.NetTxBytes == nil {
 		t.Error("network counters missing")
 	}
+	if r.ProcessCount == nil || *r.ProcessCount == 0 {
+		t.Errorf("process_count = %v", r.ProcessCount)
+	}
+	if hasConns := r.TCPConnections != nil && r.UDPConnections != nil; hasConns != (runtime.GOOS == "linux" || runtime.GOOS == "windows") {
+		t.Errorf("connection counts present=%v on %s", hasConns, runtime.GOOS)
+	}
 	if hasLoad := r.Load1 != nil && r.Load5 != nil && r.Load15 != nil; hasLoad == (runtime.GOOS == "windows") {
 		t.Errorf("load average present=%v on %s", hasLoad, runtime.GOOS)
 	}

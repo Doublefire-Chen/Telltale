@@ -23,12 +23,14 @@ const visible: Host = {
 
 describe('public Status page', () => {
   it('shows Hosts read-only to anonymous visitors', async () => {
+    const user = userEvent.setup()
     stubDashboard({ statusPublic: true, hosts: [visible] })
     render(<App />)
 
-    const row = (await screen.findByRole('rowheader', { name: /tokyo/ })).closest('tr')!
-    expect(within(row).getByText('12%')).toBeTruthy()
-    expect(screen.queryByRole('columnheader', { name: 'IP' })).toBeNull()
+    const card = await screen.findByRole('article', { name: /tokyo/ })
+    expect(within(card).getByRole('meter', { name: 'CPU' }).getAttribute('aria-valuetext')).toBe('12%')
+    await user.click(within(card).getByRole('button', { name: 'Details for tokyo' }))
+    expect(within(card).queryByText('IPv4')).toBeNull()
     expect(screen.queryByRole('button', { name: /Settings for/ })).toBeNull()
     expect(screen.queryByRole('heading', { name: 'Add Host' })).toBeNull()
     expect(screen.queryByRole('heading', { name: 'Dashboard settings' })).toBeNull()
@@ -43,20 +45,19 @@ describe('public Status page', () => {
     await user.click(await screen.findByRole('button', { name: 'Log in' }))
     expect(screen.getByLabelText('Password')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Back to the Status page' }))
-    expect(await screen.findByRole('rowheader', { name: /tokyo/ })).toBeTruthy()
+    expect(await screen.findByRole('article', { name: /tokyo/ })).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Log in' }))
     await user.type(screen.getByLabelText('Password'), 'correct horse battery')
     await user.click(screen.getByRole('button', { name: 'Log in' }))
-    expect(await screen.findByRole('columnheader', { name: 'IP' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Settings for tokyo' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Settings for tokyo' })).toBeTruthy()
   })
 
   it('shows the login form when the Status page is private', async () => {
     stubDashboard({ statusPublic: false, hosts: [visible] })
     render(<App />)
     expect(await screen.findByLabelText('Password')).toBeTruthy()
-    expect(screen.queryByRole('rowheader', { name: /tokyo/ })).toBeNull()
+    expect(screen.queryByRole('article', { name: /tokyo/ })).toBeNull()
   })
 
   it('lets the admin make the Status page public', async () => {

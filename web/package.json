@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "flag-icons": "7.6.0",
+    "font-logos": "1.4.0",
     "i18next": "26.5.5",
     "i18next-browser-languagedetector": "8.2.1",
     "react": "19.3.1",

@@ -100,11 +100,11 @@ describe('Host detail page', () => {
     await user.click(await screen.findByRole('link', { name: 'tokyo' }))
     await user.click(await screen.findByRole('button', { name: /All Hosts/ }))
     expect(location.pathname).toBe('/')
-    expect(await screen.findByRole('rowheader', { name: /tokyo/ })).toBeTruthy()
+    expect(await screen.findByRole('article', { name: /tokyo/ })).toBeTruthy()
 
     await user.click(screen.getByRole('link', { name: 'tokyo' }))
     await screen.findByRole('button', { name: /All Hosts/ })
     history.back()
-    expect(await screen.findByRole('rowheader', { name: /tokyo/ })).toBeTruthy()
+    expect(await screen.findByRole('article', { name: /tokyo/ })).toBeTruthy()
   })
 })

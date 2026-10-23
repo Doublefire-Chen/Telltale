@@ -17,8 +17,9 @@ Dashboard 一侧的任何东西都无法在你的机器上运行代码、修改�
 
 ## 功能
 
-- **实时状态页**：每台主机的国旗、系统、运行时间、CPU、负载、内存、交换、磁盘、
-  带宽和流量，随上报实时更新（默认每 2 秒一次）；连续错过三个上报周期即显示离线。
+- **实时状态页**：每台主机一张卡片，显示国旗和系统图标、CPU/内存/交换/磁盘使用率条、
+  带宽、流量、负载、运行时间以及进程数和连接数，随上报实时更新（默认每 2 秒一次）；
+  连续错过三个上报周期即显示离线。
 - **历史图表**：1 小时、24 小时、7 天和 30 天的图表，以原始上报、1 分钟平均和
   15 分钟平均三档保存在 SQLite 中。
 - 每台主机的 **IPv4 和 IPv6 地址**及其国家/地区，由 Agent 自己连接 Dashboard 得知——
@@ -153,4 +154,5 @@ go test -tags budget ./internal/e2e      # Agent 的 CPU、内存和体积预算
 ## 许可证
 
 GPL-3.0。IP 地理位置数据由 [DB-IP](https://db-ip.com) 提供（CC BY 4.0）。
-国旗图标来自 [flag-icons](https://github.com/lipis/flag-icons)（MIT）。
+国旗图标来自 [flag-icons](https://github.com/lipis/flag-icons)（MIT），
+系统图标来自 [font-logos](https://github.com/Lukas-W/font-logos)（公有领域）。

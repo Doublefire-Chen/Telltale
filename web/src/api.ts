@@ -25,6 +25,10 @@ export type Report = {
   /** Traffic: bytes since the Host's last boot. */
   net_rx_bytes?: number
   net_tx_bytes?: number
+  process_count?: number
+  /** Open TCP and UDP sockets; Agents on macOS do not send them. */
+  tcp_connections?: number
+  udp_connections?: number
   /** Bandwidth in bytes per second, derived by the Dashboard. */
   rx_rate?: number
   tx_rate?: number

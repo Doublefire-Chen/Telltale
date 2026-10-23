@@ -51,6 +51,20 @@ export const zhCN: Translation = {
     offline: '离线',
     waiting: '等待首次上报',
     hiddenTag: '已隐藏',
+    onlineShort: '在线',
+    offlineShort: '离线',
+    waitingShort: '等待中',
+    defaultGroup: '默认',
+    details: '{{name}} 的详细信息',
+    processes: '进程数',
+    connections: '连接数',
+    kernel: '内核',
+    cpuModel: 'CPU 型号',
+    bootTime: '启动于',
+    agentVersion: 'Agent',
+    cores_one: '{{count}} 核',
+    cores_other: '{{count}} 核',
+    off: '关闭',
   },
   addHost: {
     title: '添加主机',
@@ -97,6 +111,7 @@ export const zhCN: Translation = {
     noData: '该时间范围内暂无历史数据。',
   },
   footer: {
+    poweredBy: '由 Telltale 驱动',
     geoip: 'IP 地理位置数据由 DB-IP 提供',
   },
 }
