@@ -9,3 +9,6 @@
 # GeoIP database (downloaded by `make geoip`, embedded into the Dashboard)
 /internal/dashboard/geoip/data/*
 !/internal/dashboard/geoip/data/.gitkeep
+
+# Release build output
+/dist/

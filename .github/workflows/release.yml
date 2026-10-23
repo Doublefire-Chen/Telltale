@@ -1,0 +1,54 @@
+name: Release
+
+# Pushing a tag like v1.2.3 builds every Agent and Dashboard binary under that
+# one version, signs SHA256SUMS with cosign (keyless: the signature is tied to
+# this workflow at this tag, and there is no private key to keep), and
+# publishes them as a GitHub release.
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release
+      id-token: write # cosign keyless signing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: sigstore/cosign-installer@v3
+      - name: Web app
+        working-directory: web
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+      - name: GeoIP database
+        run: ./scripts/fetch-geoip.sh
+      - name: Test
+        run: |
+          go vet ./...
+          go test -race ./...
+      - name: Agent resource budget
+        run: go test -tags budget -v ./internal/e2e -run TestAgentBudget
+      - name: Build
+        run: ./scripts/build-release.sh "$GITHUB_REF_NAME"
+      - name: Sign
+        working-directory: dist
+        run: cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag

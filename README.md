@@ -37,13 +37,34 @@ upstream release can never break your fleet on its own. See
 
 ## Install
 
-Binaries are attached to each [release](https://github.com/Doublefire-Chen/Telltale/releases)
-with SHA-256 checksums. To build from source instead you need Go and Node.js:
+Binaries are attached to each [release](https://github.com/Doublefire-Chen/Telltale/releases):
+`telltale-agent-<os>-<arch>` (Linux, Windows, macOS; amd64 and arm64) and
+`telltale-dashboard-linux-<arch>`, all built from one tag under one version.
+To build from source instead you need Go and Node.js:
 
 ```sh
 make geoip   # download the DB-IP Lite country database to embed (optional)
 make build   # bin/telltale-dashboard and bin/telltale-agent
 ```
+
+### Verifying a download
+
+`SHA256SUMS` lists every binary's checksum, and `SHA256SUMS.sigstore.json`
+is a [cosign](https://docs.sigstore.dev/cosign/system_config/installation/)
+signature proving the file was made by this repository's release workflow at
+that tag. There is no signing key to steal: the signature is tied to the
+workflow's GitHub identity. With `VERSION` set to the release, for example
+`VERSION=v0.1.0`:
+
+```sh
+cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity "https://github.com/Doublefire-Chen/Telltale/.github/workflows/release.yml@refs/tags/$VERSION"
+sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
+```
+
+`install.sh --version` always checks the binary against `SHA256SUMS`; run the
+`cosign` step yourself if you also want to check who published it.
 
 ### 1. The Dashboard (Linux)
 
@@ -137,7 +158,11 @@ permanently, not just for now.
 make test   # Go and web tests
 ./scripts/test-install-in-container.sh   # installer and systemd units (Docker)
 ./scripts/test-nginx-in-container.sh     # the sample nginx config (Docker)
+go test -tags budget ./internal/e2e      # the Agent's CPU, memory and size budget (Linux, ~1 min)
 ```
+
+To release, push a tag such as `v0.1.0`: the release workflow tests, builds,
+signs and publishes everything.
 
 ## License
 

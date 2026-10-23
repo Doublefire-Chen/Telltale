@@ -34,6 +34,18 @@ jobs:
           go vet ./...
           go test -race ./...
 
+  budget:
+    name: Agent resource budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # Fails if the Agent's binary size, peak memory or CPU at the default
+      # interval goes over budget (see internal/e2e/budget_test.go).
+      - run: go test -tags budget -v ./internal/e2e -run TestAgentBudget
+
   agent:
     name: Agent (${{ matrix.os }})
     strategy:

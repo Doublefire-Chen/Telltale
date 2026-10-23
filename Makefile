@@ -4,7 +4,7 @@
 VERSION ?= dev
 LDFLAGS := -s -w -X github.com/Doublefire-Chen/Telltale/internal/version.Version=$(VERSION)
 
-.PHONY: build web geoip dashboard agent test clean
+.PHONY: build web geoip dashboard agent test release clean
 
 build: dashboard agent
 
@@ -26,5 +26,9 @@ test:
 	go test ./...
 	cd web && npm run typecheck && npm test
 
+# Every release binary under VERSION, with SHA256SUMS, in dist/.
+release: web geoip
+	./scripts/build-release.sh $(VERSION)
+
 clean:
-	rm -rf bin web/dist/app
+	rm -rf bin dist web/dist/app

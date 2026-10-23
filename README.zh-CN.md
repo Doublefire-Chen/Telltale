@@ -33,13 +33,32 @@ Dashboard 一侧的任何东西都无法在你的机器上运行代码、修改�
 
 ## 安装
 
-每个 [Release](https://github.com/Doublefire-Chen/Telltale/releases) 都附带二进制文件和
-SHA-256 校验和。若要从源码构建，需要 Go 和 Node.js：
+每个 [Release](https://github.com/Doublefire-Chen/Telltale/releases) 都附带二进制文件：
+`telltale-agent-<系统>-<架构>`（Linux、Windows、macOS；amd64 与 arm64）和
+`telltale-dashboard-linux-<架构>`，全部由同一个标签、以同一个版本号构建。
+若要从源码构建，需要 Go 和 Node.js：
 
 ```sh
 make geoip   # 下载要内嵌的 DB-IP Lite 国家数据库（可选）
 make build   # 生成 bin/telltale-dashboard 和 bin/telltale-agent
 ```
+
+### 校验下载的文件
+
+`SHA256SUMS` 列出了每个二进制文件的校验和；`SHA256SUMS.sigstore.json` 是
+[cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 签名，
+证明该文件确实由本仓库的发布流程在对应标签上生成。签名绑定的是发布流程的 GitHub 身份，
+没有可被盗取的签名密钥。把 `VERSION` 设为对应版本，例如 `VERSION=v0.1.0`：
+
+```sh
+cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity "https://github.com/Doublefire-Chen/Telltale/.github/workflows/release.yml@refs/tags/$VERSION"
+sha256sum --ignore-missing -c SHA256SUMS   # macOS：shasum -a 256 --ignore-missing -c SHA256SUMS
+```
+
+`install.sh --version` 总会用 `SHA256SUMS` 校验二进制文件；如果还想确认发布者，
+请自己运行上面的 `cosign` 命令。
 
 ### 1. Dashboard（Linux）
 
@@ -126,7 +145,10 @@ Dashboard 和 Agent 可以分别升级，顺序随意。比 Dashboard 旧的 Age
 make test   # Go 与前端测试
 ./scripts/test-install-in-container.sh   # 安装脚本与 systemd 服务（需要 Docker）
 ./scripts/test-nginx-in-container.sh     # 示例 nginx 配置（需要 Docker）
+go test -tags budget ./internal/e2e      # Agent 的 CPU、内存和体积预算（Linux，约 1 分钟）
 ```
+
+发布时推送一个标签（例如 `v0.1.0`）即可：发布流程会自动测试、构建、签名并发布全部文件。
 
 ## 许可证
 
