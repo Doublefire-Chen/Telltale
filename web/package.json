@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "bootstrap-icons": "1.11.3",
     "flag-icons": "7.6.0",
     "font-logos": "1.4.0",
     "i18next": "26.5.5",

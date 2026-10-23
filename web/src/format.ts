@@ -21,6 +21,18 @@ export function formatBytes(value: number | undefined, lang: string): string {
   return `${new Intl.NumberFormat(lang, { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n)} ${byteUnits[unit]}`
 }
 
+/** formatCapacity is a size without needless decimals, e.g. "2 GiB" or "3.9 TiB". */
+export function formatCapacity(value: number | undefined, lang: string): string {
+  if (value === undefined) return unknown
+  let unit = 0
+  let n = value
+  while (n >= 1024 && unit < byteUnits.length - 1) {
+    n /= 1024
+    unit++
+  }
+  return `${new Intl.NumberFormat(lang, { maximumFractionDigits: n < 10 ? 1 : 0 }).format(n)} ${byteUnits[unit]}`
+}
+
 export function formatRate(bytesPerSecond: number | undefined, lang: string): string {
   if (bytesPerSecond === undefined) return unknown
   return `${formatBytes(bytesPerSecond, lang)}/s`

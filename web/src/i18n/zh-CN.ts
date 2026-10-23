@@ -56,6 +56,7 @@ export const zhCN: Translation = {
     waitingShort: '等待中',
     defaultGroup: '默认',
     details: '{{name}} 的详细信息',
+    specs: '信息',
     processes: '进程数',
     connections: '连接数',
     kernel: '内核',

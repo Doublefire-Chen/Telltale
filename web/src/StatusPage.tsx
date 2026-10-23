@@ -14,9 +14,10 @@ import {
   setHostOrder,
 } from './api'
 import { Flags } from './Flag'
-import { formatBytes, formatLoad, formatPercent, formatRate, formatUsage, unknown, uptimeParts } from './format'
+import { formatBytes, formatCapacity, formatLoad, formatPercent, formatRate, formatUsage, unknown, uptimeParts } from './format'
 import { HostDetail } from './HostDetail'
 import { HostSettings } from './HostSettings'
+import { Icon, type IconName } from './Icon'
 import { OsLogo } from './OsLogo'
 import { hostHref, useRoute } from './route'
 import { TokenReveal } from './TokenReveal'
@@ -247,47 +248,50 @@ function HostCard({ host: h, dashboardVersion, now, admin, onOpen, settingsOpen,
   return (
     <article className={`host-card ${state}`} aria-labelledby={nameId}>
       <header className="host-card-header">
-        <Flags countries={h.countries} />
-        <OsLogo info={info} />
-        <a
-          id={nameId}
-          className="host-name"
-          href={hostHref(h.id)}
-          onClick={(e) => {
-            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-            e.preventDefault()
-            onOpen()
-          }}
-        >
-          {name}
-        </a>
-        <span className={`state ${state}`} role="img" aria-label={t(`status.${state}`)} title={t(`status.${state}`)}>
-          {state !== 'online' && t(`status.${state}Short`)}
-        </span>
-        <span className="spacer" />
-        <button
-          type="button"
-          className="card-icon"
-          aria-expanded={detailsOpen}
-          aria-controls={detailsId}
-          aria-label={t('status.details', { name })}
-          title={t('status.details', { name })}
-          onClick={() => setDetailsOpen(!detailsOpen)}
-        >
-          <InfoIcon />
-        </button>
-        {admin && (
+        <h3 className="host-title">
+          <Flags countries={h.countries} />
+          <OsLogo info={info} />
+          <a
+            id={nameId}
+            className="host-name"
+            href={hostHref(h.id)}
+            onClick={(e) => {
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+              e.preventDefault()
+              onOpen()
+            }}
+          >
+            {name}
+          </a>
+          <span className={`state ${state}`} role="img" aria-label={t(`status.${state}`)} title={t(`status.${state}`)}>
+            {state !== 'online' && t(`status.${state}Short`)}
+          </span>
+        </h3>
+        <div className="card-actions">
+          {admin && (
+            <button
+              type="button"
+              className="card-icon settings"
+              aria-expanded={settingsOpen}
+              aria-label={t('status.settings', { name })}
+              title={t('status.settings', { name })}
+              onClick={onToggleSettings}
+            >
+              <Icon name="gear-fill" />
+            </button>
+          )}
           <button
             type="button"
-            className="card-icon"
-            aria-expanded={settingsOpen}
-            aria-label={t('status.settings', { name })}
-            title={t('status.settings', { name })}
-            onClick={onToggleSettings}
+            className="card-icon info"
+            aria-expanded={detailsOpen}
+            aria-controls={detailsId}
+            aria-label={t('status.details', { name })}
+            title={t('status.details', { name })}
+            onClick={() => setDetailsOpen(!detailsOpen)}
           >
-            <GearIcon />
+            <Icon name="info-circle-fill" />
           </button>
-        )}
+        </div>
       </header>
       {(h.hidden || h.agent_outdated) && (
         <div className="tags">
@@ -302,67 +306,23 @@ function HostCard({ host: h, dashboardVersion, now, admin, onOpen, settingsOpen,
           )}
         </div>
       )}
-      {detailsOpen && (
-        <dl id={detailsId} className="host-details">
-          {admin && (
-            <>
-              <dt>IPv4</dt>
-              <dd>{h.ipv4 || unknown}</dd>
-              <dt>IPv6</dt>
-              <dd>{h.ipv6 || unknown}</dd>
-            </>
-          )}
-          <dt>{t('status.processes')}</dt>
-          <dd>{r?.process_count ?? unknown}</dd>
-          <dt>{t('status.connections')}</dt>
-          <dd>
-            {r?.tcp_connections === undefined && r?.udp_connections === undefined
-              ? unknown
-              : `TCP ${r?.tcp_connections ?? unknown} · UDP ${r?.udp_connections ?? unknown}`}
-          </dd>
-          <dt>{t('status.kernel')}</dt>
-          <dd>{info?.kernel_version || unknown}</dd>
-          <dt>{t('status.cpuModel')}</dt>
-          <dd>{info?.cpu_model || unknown}</dd>
-          <dt>{t('status.bootTime')}</dt>
-          <dd>
-            {info?.boot_time === undefined
-              ? unknown
-              : new Date(info.boot_time * 1000).toLocaleString(lang, { dateStyle: 'medium', timeStyle: 'short' })}
-          </dd>
-          <dt>{t('status.agentVersion')}</dt>
-          <dd>{info?.agent_version || unknown}</dd>
-        </dl>
-      )}
       <dl className="metrics">
         <dt>{t('status.cpu')}</dt>
         <dd>
           <UsageBar label={t('status.cpu')} percent={r?.cpu_percent} live={live} />
-          <span className="usage">{info?.cpu_cores ? t('status.cores', { count: info.cpu_cores }) : ''}</span>
         </dd>
         <dt>{t('status.memory')}</dt>
         <dd>
           <UsageBar label={t('status.memory')} percent={ratio(r?.memory_used, info?.memory_total)} live={live} />
-          <span className="usage">{formatUsage(r?.memory_used, info?.memory_total, lang)}</span>
         </dd>
         <dt>{t('status.swap')}</dt>
         <dd>
-          {info?.swap_total === 0 ? (
-            <>
-              <UsageBar label={t('status.swap')} percent={undefined} live={live} text={t('status.off')} />
-              <span className="usage" />
-            </>
-          ) : (
-            <>
-              <UsageBar label={t('status.swap')} percent={ratio(r?.swap_used, info?.swap_total)} live={live} />
-              <span className="usage">{formatUsage(r?.swap_used, info?.swap_total, lang)}</span>
-            </>
-          )}
-        </dd>
-        <dt>{t('status.disk')}</dt>
-        <dd>
-          <UsageBar label={t('status.disk')} percent={ratio(r?.disk_used, info?.disk_total)} live={live} />
-          <span className="usage">{formatUsage(r?.disk_used, info?.disk_total, lang)}</span>
+          <UsageBar
+            label={t('status.swap')}
+            percent={info?.swap_total === 0 ? undefined : ratio(r?.swap_used, info?.swap_total)}
+            live={live}
+            text={info?.swap_total === 0 ? t('status.off') : undefined}
+          />
         </dd>
         <dt>{t('status.bandwidth')}</dt>
         <dd>
@@ -370,17 +330,79 @@ function HostCard({ host: h, dashboardVersion, now, admin, onOpen, settingsOpen,
         </dd>
         <dt>{t('status.traffic')}</dt>
         <dd>
-          <InOut inValue={formatBytes(r?.net_rx_bytes, lang)} outValue={formatBytes(r?.net_tx_bytes, lang)} />
+          <InOut inValue={formatBytes(r?.net_rx_bytes, lang)} outValue={formatBytes(r?.net_tx_bytes, lang)} filled />
         </dd>
-        <dt>{t('status.system')}</dt>
-        <dd className="text">{systemSummary(info)}</dd>
-        <dt>{t('status.load')}</dt>
-        <dd className="text">{formatLoad([r?.load1, r?.load5, r?.load15], lang)}</dd>
+        <dt>{t('status.disk')}</dt>
+        <dd>
+          <UsageBar label={t('status.disk')} percent={ratio(r?.disk_used, info?.disk_total)} live={live} />
+        </dd>
+        <dt>{t('status.specs')}</dt>
+        <dd className="specs">
+          <span>
+            <Icon name="cpu-fill" className="cpu" />
+            {info?.cpu_cores ? t('status.cores', { count: info.cpu_cores }) : unknown}
+          </span>
+          <span>
+            <Icon name="memory" className="ram" />
+            <span className="visually-hidden">{t('status.memory')} </span>
+            {formatCapacity(info?.memory_total, lang)}
+          </span>
+          <span>
+            <Icon name="hdd-fill" className="hdd" />
+            <span className="visually-hidden">{t('status.disk')} </span>
+            {formatCapacity(info?.disk_total, lang)}
+          </span>
+        </dd>
         <dt>{t('status.uptime')}</dt>
-        <dd className="text">
+        <dd>
+          <Icon name="clock-fill" className="muted-icon" />
           <Uptime bootTime={info?.boot_time} now={now} />
         </dd>
       </dl>
+      {detailsOpen && (
+        <div id={detailsId} className="host-popover" role="group" aria-label={t('status.details', { name })}>
+          <dl className="host-details">
+            {admin && (
+              <>
+                <dt>IPv4</dt>
+                <dd>{h.ipv4 || unknown}</dd>
+                <dt>IPv6</dt>
+                <dd>{h.ipv6 || unknown}</dd>
+              </>
+            )}
+            <dt>{t('status.system')}</dt>
+            <dd>{systemSummary(info)}</dd>
+            <dt>{t('status.kernel')}</dt>
+            <dd>{info?.kernel_version || unknown}</dd>
+            <dt>{t('status.cpuModel')}</dt>
+            <dd>{info?.cpu_model || unknown}</dd>
+            <dt>{t('status.memory')}</dt>
+            <dd>{formatUsage(r?.memory_used, info?.memory_total, lang)}</dd>
+            <dt>{t('status.swap')}</dt>
+            <dd>{info?.swap_total === 0 ? t('status.off') : formatUsage(r?.swap_used, info?.swap_total, lang)}</dd>
+            <dt>{t('status.disk')}</dt>
+            <dd>{formatUsage(r?.disk_used, info?.disk_total, lang)}</dd>
+            <dt>{t('status.load')}</dt>
+            <dd>{formatLoad([r?.load1, r?.load5, r?.load15], lang)}</dd>
+            <dt>{t('status.processes')}</dt>
+            <dd>{r?.process_count ?? unknown}</dd>
+            <dt>{t('status.connections')}</dt>
+            <dd>
+              {r?.tcp_connections === undefined && r?.udp_connections === undefined
+                ? unknown
+                : `TCP ${r?.tcp_connections ?? unknown} · UDP ${r?.udp_connections ?? unknown}`}
+            </dd>
+            <dt>{t('status.bootTime')}</dt>
+            <dd>
+              {info?.boot_time === undefined
+                ? unknown
+                : new Date(info.boot_time * 1000).toLocaleString(lang, { dateStyle: 'medium', timeStyle: 'short' })}
+            </dd>
+            <dt>{t('status.agentVersion')}</dt>
+            <dd>{info?.agent_version || unknown}</dd>
+          </dl>
+        </div>
+      )}
     </article>
   )
 }
@@ -398,7 +420,7 @@ function level(percent: number): 'fine' | 'warning' | 'critical' {
   return 'critical'
 }
 
-/** UsageBar is a meter that turns orange and red as it fills, and grey while Offline. */
+/** UsageBar is a pill-shaped meter that turns orange and red as it fills, and grey while Offline. */
 function UsageBar({ label, percent, live, text }: { label: string; percent: number | undefined; live: boolean; text?: string }) {
   const { i18n } = useTranslation()
   const lang = i18n.resolvedLanguage ?? 'en'
@@ -406,7 +428,7 @@ function UsageBar({ label, percent, live, text }: { label: string; percent: numb
   const shown = text ?? (clamped === undefined ? unknown : formatPercent(Math.round(clamped), lang))
   return (
     <div
-      className={`bar ${clamped === undefined ? 'empty' : live ? level(clamped) : 'stale'}${clamped !== undefined && clamped >= 85 ? ' full' : ''}`}
+      className={`bar ${clamped === undefined ? 'empty' : live ? level(clamped) : 'stale'}`}
       role="meter"
       aria-label={label}
       aria-valuemin={0}
@@ -414,32 +436,14 @@ function UsageBar({ label, percent, live, text }: { label: string; percent: numb
       aria-valuenow={clamped}
       aria-valuetext={shown}
     >
-      <div className="bar-fill" style={{ width: `${clamped ?? 0}%` }} />
-      <span className="bar-text">{shown}</span>
+      {clamped === undefined ? (
+        <span className="bar-text">{shown}</span>
+      ) : (
+        <div className="bar-fill" style={{ width: `${clamped}%` }}>
+          <span className="bar-text">{shown}</span>
+        </div>
+      )}
     </div>
-  )
-}
-
-function InfoIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width={16} height={16} aria-hidden="true">
-      <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M8 7v4.5M8 4.6v.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function GearIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width={16} height={16} aria-hidden="true">
-      <circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
-      <path
-        d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-    </svg>
   )
 }
 
@@ -461,17 +465,19 @@ function Uptime({ bootTime, now }: { bootTime: number | undefined; now: number }
 }
 
 /** InOut shows an inbound and an outbound value, labelled for screen readers. */
-function InOut({ inValue, outValue }: { inValue: string; outValue: string }) {
+function InOut({ inValue, outValue, filled = false }: { inValue: string; outValue: string; filled?: boolean }) {
   const { t } = useTranslation()
+  const down: IconName = filled ? 'arrow-down-circle-fill' : 'arrow-down-circle'
+  const up: IconName = filled ? 'arrow-up-circle-fill' : 'arrow-up-circle'
   return (
     <span className="in-out">
       <span>
-        <span aria-hidden="true" className="arrow">↓</span>
+        <Icon name={down} className="muted-icon" />
         <span className="visually-hidden">{t('status.in')} </span>
         {inValue}
       </span>
       <span>
-        <span aria-hidden="true" className="arrow">↑</span>
+        <Icon name={up} className="muted-icon" />
         <span className="visually-hidden">{t('status.out')} </span>
         {outValue}
       </span>

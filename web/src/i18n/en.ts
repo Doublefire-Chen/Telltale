@@ -55,6 +55,7 @@ export const en = {
     waitingShort: 'Waiting',
     defaultGroup: 'Default',
     details: 'Details for {{name}}',
+    specs: 'Info',
     processes: 'Processes',
     connections: 'Connections',
     kernel: 'Kernel',
