@@ -87,6 +87,12 @@ func Open(dataDir string) (*Store, error) {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create data directory: %w", err)
 	}
+	// Also when it already existed: the database holds the password hash and
+	// every Host's addresses, and SQLite creates its files with the umask's
+	// permissions, which outside the systemd unit are usually 0644.
+	if err := os.Chmod(dataDir, 0o700); err != nil {
+		return nil, fmt.Errorf("restrict data directory: %w", err)
+	}
 	dsn := "file:" + filepath.Join(dataDir, DBFile) +
 		"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
 	db, err := sql.Open("sqlite", dsn)
