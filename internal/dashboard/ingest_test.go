@@ -167,6 +167,30 @@ func TestReportRejections(t *testing.T) {
 	}
 }
 
+// TestFloodingHostIsLimited checks that a leaked token cannot flood the
+// Dashboard: past what an Agent would ever send, its Host gets 429 for the
+// rest of the minute, while other Hosts are unaffected.
+func TestFloodingHostIsLimited(t *testing.T) {
+	h := newHarness(t, nil)
+	h.setPassword(testPassword)
+	session := h.loginOK()
+	flooder, other := h.addHost(session, "web-1"), h.addHost(session, "web-2")
+	valid := `{"time":1,"interval_ms":1000}`
+
+	for range 240 {
+		expectStatus(t, h.postReport("Bearer "+flooder.Token, valid), http.StatusNoContent)
+	}
+	resp := h.postReport("Bearer "+flooder.Token, valid)
+	expectStatus(t, resp, http.StatusTooManyRequests)
+	if resp.Header.Get("Retry-After") == "" {
+		t.Error("429 without Retry-After")
+	}
+	expectStatus(t, h.postReport("Bearer "+other.Token, valid), http.StatusNoContent)
+
+	h.clock.Advance(time.Minute)
+	expectStatus(t, h.postReport("Bearer "+flooder.Token, valid), http.StatusNoContent)
+}
+
 func TestReportToleratesUnknownAndMissingFields(t *testing.T) {
 	h := newHarness(t, nil)
 	h.setPassword(testPassword)

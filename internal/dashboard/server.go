@@ -43,6 +43,12 @@ const (
 	agentMaxFailures   = 20
 	agentFailureWindow = time.Minute
 
+	// An Agent sends a Report at most every second and Host Info a few
+	// times an hour, so this many requests a minute from one Host is a
+	// leaked token flooding the Dashboard, not an Agent.
+	hostMaxRequests   = 240
+	hostRequestWindow = time.Minute
+
 	maxJSONBody = 4 << 10
 )
 
@@ -84,9 +90,11 @@ type Server struct {
 	geoip          *geoip.DB
 	now            func() time.Time
 	logger         *slog.Logger
-	logins         *failureLimiter
+	logins         *windowLimiter
 	// agentFailures rate-limits rejected Agent requests per client address.
-	agentFailures *failureLimiter
+	agentFailures *windowLimiter
+	// hostRequests rate-limits accepted Agent requests per Host.
+	hostRequests *windowLimiter
 	latest        latestReports
 	hub           hub
 	mux           *http.ServeMux
@@ -112,8 +120,9 @@ func New(opts Options) *Server {
 		app:           opts.App,
 		now:           opts.Now,
 		logger:        opts.Logger,
-		logins:        newFailureLimiter(loginMaxFailures, loginWindow),
-		agentFailures: newFailureLimiter(agentMaxFailures, agentFailureWindow),
+		logins:        newWindowLimiter(loginMaxFailures, loginWindow),
+		agentFailures: newWindowLimiter(agentMaxFailures, agentFailureWindow),
+		hostRequests:  newWindowLimiter(hostMaxRequests, hostRequestWindow),
 		mux:           http.NewServeMux(),
 		sweepEvery:    opts.SweepInterval,
 		offline:       make(map[string]bool),
@@ -169,7 +178,7 @@ func New(opts Options) *Server {
 
 // Run does the Dashboard's background work until ctx ends: it announces
 // Hosts that go Offline, writes buffered Reports to the database, and
-// downsamples history. Buffered Reports are written once more on the way out.
+// downsamples history and sweeps the rate limiters. Buffered Reports are written once more on the way out.
 func (s *Server) Run(ctx context.Context) {
 	sweep := time.NewTicker(s.sweepEvery)
 	defer sweep.Stop()
@@ -191,6 +200,10 @@ func (s *Server) Run(ctx context.Context) {
 			s.flush(db)
 		case <-downsample.C:
 			s.downsample(db)
+			now := s.now()
+			for _, l := range []*windowLimiter{s.logins, s.agentFailures, s.hostRequests} {
+				l.sweep(now)
+			}
 		}
 	}
 }
@@ -363,7 +376,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Username != AdminUsername || !match {
-		s.logins.fail(key, now)
+		s.logins.add(key, now)
 		writeError(w, http.StatusUnauthorized, "invalid_credentials")
 		return
 	}

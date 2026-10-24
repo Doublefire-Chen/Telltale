@@ -16,7 +16,8 @@ import (
 // codes: Agents read nothing else, so nothing else is sent.
 //
 // An address with too many rejections in a short time gets 429 without its
-// token being looked up.
+// token being looked up, and so does a Host sending far more often than an
+// Agent would.
 func (s *Server) authenticateAgent(w http.ResponseWriter, r *http.Request) (store.Host, bool) {
 	key := s.clientIP(r).String()
 	now := s.now()
@@ -27,7 +28,7 @@ func (s *Server) authenticateAgent(w http.ResponseWriter, r *http.Request) (stor
 	}
 	token, ok := bearerToken(r)
 	if !ok {
-		s.agentFailures.fail(key, now)
+		s.agentFailures.add(key, now)
 		w.WriteHeader(http.StatusUnauthorized)
 		return store.Host{}, false
 	}
@@ -38,10 +39,16 @@ func (s *Server) authenticateAgent(w http.ResponseWriter, r *http.Request) (stor
 		return store.Host{}, false
 	}
 	if !ok {
-		s.agentFailures.fail(key, now)
+		s.agentFailures.add(key, now)
 		w.WriteHeader(http.StatusUnauthorized)
 		return store.Host{}, false
 	}
+	if blocked, wait := s.hostRequests.blocked(host.ID, now); blocked {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Round(time.Second).Seconds())))
+		w.WriteHeader(http.StatusTooManyRequests)
+		return store.Host{}, false
+	}
+	s.hostRequests.add(host.ID, now)
 	return host, true
 }
 
