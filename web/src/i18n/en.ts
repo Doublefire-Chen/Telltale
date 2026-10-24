@@ -88,6 +88,7 @@ export const en = {
     agent: 'Agent',
     state: 'Status',
     hidden: 'Hidden',
+    publicHistory: 'Public history',
     manage: 'Manage',
     yes: 'Yes',
     no: 'No',
@@ -95,6 +96,7 @@ export const en = {
     outdated: 'Outdated',
     moveUp: 'Move {{name}} up',
     moveDown: 'Move {{name}} down',
+    history: 'History of {{name}}',
     edit: 'Edit {{name}}',
     regenerate: 'Regenerate the token of {{name}}',
     delete: 'Delete {{name}}',
@@ -127,6 +129,8 @@ export const en = {
     countryHint: 'Two-letter code such as JP. Leave blank to use GeoIP.',
     invalidCountry: 'Enter a two-letter country code, or leave it blank.',
     hidden: 'Hide from the public Status page',
+    publicHistory: 'Show its history on the public Status page',
+    publicHistoryHint: 'Off by default. Applies only while the Status page is public and this Host is not hidden.',
   },
   token: {
     addedTitle: 'Host “{{name}}” added',
@@ -154,8 +158,10 @@ export const en = {
   },
   detail: {
     back: 'All Hosts',
+    title: 'History of {{name}}',
     range: 'Time range',
     noData: 'No history for this range yet.',
+    notFound: 'No such Host.',
   },
   footer: {
     poweredBy: 'Powered by Telltale',

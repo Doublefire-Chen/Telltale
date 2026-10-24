@@ -70,9 +70,11 @@ export type Host = {
   group: string
   /** Left off the public Status page. */
   hidden: boolean
+  /** Visitors of a public Status page may open this Host's history. */
+  public_history: boolean
 }
 
-export type HostUpdate = Partial<Pick<Host, 'name' | 'group' | 'hidden' | 'country_override'>>
+export type HostUpdate = Partial<Pick<Host, 'name' | 'group' | 'hidden' | 'public_history' | 'country_override'>>
 
 export type Status = {
   dashboard_version: string

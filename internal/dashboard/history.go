@@ -169,7 +169,9 @@ type historyResponse struct {
 }
 
 // handleHistory serves one Host's charted metrics for a range (1h, 24h, 7d or
-// 30d) from the tier that covers it. Hidden Hosts are not found by anonymous viewers.
+// 30d) from the tier that covers it. History is the admin's, except that
+// visitors of a public Status page may see a Host whose history the admin made
+// public (and did not hide). Anyone else is told the Host does not exist.
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	rng := r.URL.Query().Get("range")
 	spec, ok := historyRanges[rng]
@@ -183,17 +185,12 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, err)
 		return
 	}
-	exists, err := s.store.HostExists(r.Context(), id)
+	host, exists, err := s.store.HostByID(r.Context(), id)
 	if err != nil {
 		s.internalError(w, err)
 		return
 	}
-	hidden, err := s.isHidden(id)
-	if err != nil {
-		s.internalError(w, err)
-		return
-	}
-	if !exists || (hidden && !admin) {
+	if !exists || (!admin && (host.Hidden || !host.PublicHistory)) {
 		writeError(w, http.StatusNotFound, "not_found")
 		return
 	}

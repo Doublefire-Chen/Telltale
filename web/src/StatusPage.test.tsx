@@ -49,6 +49,7 @@ function host(h: Partial<Host> & Pick<Host, 'id'>): Host {
     country_override: '',
     group: '',
     hidden: false,
+    public_history: false,
     ...h,
   }
 }

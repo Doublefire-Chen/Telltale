@@ -30,6 +30,7 @@ export function HostForm({ host, displayName, groups, onClose, onSaved }: HostFo
   const [group, setGroup] = useState(host?.group ?? '')
   const [country, setCountry] = useState(host?.country_override ?? '')
   const [hidden, setHidden] = useState(host?.hidden ?? false)
+  const [publicHistory, setPublicHistory] = useState(host?.public_history ?? false)
   const [error, setError] = useState<FieldError | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -37,15 +38,20 @@ export function HostForm({ host, displayName, groups, onClose, onSaved }: HostFo
     e.preventDefault()
     setBusy(true)
     setError(null)
-    const update = { name: name.trim(), group: group.trim(), hidden, country_override: country.trim() }
+    const update = { name: name.trim(), group: group.trim(), hidden, public_history: publicHistory, country_override: country.trim() }
     try {
       if (host) {
         await updateHost(host.id, update)
         await onSaved()
       } else {
         const added = await addHost(update.name)
-        if (update.group || update.hidden || update.country_override) {
-          await updateHost(added.id, { group: update.group, hidden: update.hidden, country_override: update.country_override })
+        if (update.group || update.hidden || update.public_history || update.country_override) {
+          await updateHost(added.id, {
+            group: update.group,
+            hidden: update.hidden,
+            public_history: update.public_history,
+            country_override: update.country_override,
+          })
         }
         await onSaved(added)
       }
@@ -127,6 +133,18 @@ export function HostForm({ host, displayName, groups, onClose, onSaved }: HostFo
             <input type="checkbox" name="hidden" checked={hidden} onChange={(e) => setHidden(e.target.checked)} />
             <span>{t('hostForm.hidden')}</span>
           </label>
+        </div>
+        <div className="field">
+          <label className="ui checkbox">
+            <input
+              type="checkbox"
+              name="public_history"
+              checked={publicHistory}
+              onChange={(e) => setPublicHistory(e.target.checked)}
+            />
+            <span>{t('hostForm.publicHistory')}</span>
+          </label>
+          <small className="hint">{t('hostForm.publicHistoryHint')}</small>
         </div>
         {error && (
           <div className="ui error message" role="alert">

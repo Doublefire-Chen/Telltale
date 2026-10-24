@@ -136,7 +136,12 @@ func (s *Store) History(ctx context.Context, hostID string, tier Tier, from int6
 		return History{}, err
 	}
 	defer rows.Close()
-	var h History
+	// Empty, not nil, so a range without samples still has every column (the
+	// web app gets [] rather than null for each).
+	h := History{T: []int64{}}
+	for _, col := range []*[]*float64{&h.CPU, &h.Memory, &h.Swap, &h.Disk, &h.RxRate, &h.TxRate, &h.Load1} {
+		*col = []*float64{}
+	}
 	for rows.Next() {
 		var t int64
 		var v [7]sql.NullFloat64

@@ -48,6 +48,8 @@ type hostView struct {
 	Group string `json:"group"`
 	// Hidden Hosts are left off the public Status page.
 	Hidden bool `json:"hidden"`
+	// PublicHistory lets visitors of a public Status page open the Host's history.
+	PublicHistory bool `json:"public_history"`
 }
 
 // addressMaxAge is how long an address stays shown without being seen again.
@@ -80,7 +82,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		if h.Hidden && !admin {
 			continue
 		}
-		v := hostView{ID: h.ID, Name: h.Name, Group: h.Group, Hidden: h.Hidden}
+		v := hostView{ID: h.ID, Name: h.Name, Group: h.Group, Hidden: h.Hidden, PublicHistory: h.PublicHistory}
 		if h.HostInfo != nil {
 			var info v1.HostInfo
 			if err := json.Unmarshal(h.HostInfo, &info); err == nil {
@@ -189,17 +191,18 @@ type updateHostRequest struct {
 	Name            *string `json:"name"`
 	Group           *string `json:"group"`
 	Hidden          *bool   `json:"hidden"`
+	PublicHistory   *bool   `json:"public_history"`
 	CountryOverride *string `json:"country_override"`
 }
 
 // handleUpdateHost changes a Host's Dashboard-side settings: display name,
-// group, Hidden flag and country override. Nothing is sent to its Agent.
+// group, Hidden flag, public history and country override. Nothing is sent to its Agent.
 func (s *Server) handleUpdateHost(w http.ResponseWriter, r *http.Request) {
 	var req updateHostRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	u := store.HostUpdate{Hidden: req.Hidden}
+	u := store.HostUpdate{Hidden: req.Hidden, PublicHistory: req.PublicHistory}
 	if req.Name != nil {
 		name := strings.TrimSpace(*req.Name)
 		if utf8.RuneCountInString(name) > maxHostNameLen {

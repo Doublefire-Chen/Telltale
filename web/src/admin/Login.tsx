@@ -1,7 +1,6 @@
 import { type FormEvent, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { login, type LoginResult } from '../api'
-import { Icon } from '../Icon'
 import { LanguageToggle } from '../LanguageToggle'
 import { AdminChrome } from './AdminPanel'
 
@@ -40,7 +39,7 @@ export function Login({ onLoggedIn, onBack }: LoginProps) {
     <AdminChrome className="login" right={<LanguageToggle className="item language" />}>
       <div className="login-column">
         <h1 className="ui image header">
-          <Icon name="speedometer2" className="logo" />
+          <img className="logo" src="/favicon.svg" alt="" />
           <span className="content">{t('login.title')}</span>
         </h1>
         <form className={`ui large form${result ? ' error' : ''}`} onSubmit={(e) => void submit(e)}>

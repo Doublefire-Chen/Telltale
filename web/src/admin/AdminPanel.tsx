@@ -1,9 +1,11 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { logout } from '../api'
-import { useHosts } from '../hosts'
+import { type Host, logout } from '../api'
+import { HistoryView } from '../HistoryView'
+import { displayName, useHosts } from '../hosts'
 import { Icon, type IconName } from '../Icon'
 import { adminHref, adminSettingsHref, type Route, useRoute } from '../route'
+import { ErrorBoundary } from './ErrorBoundary'
 import { HostsPage } from './HostsPage'
 import { Confirm, Toast, type ToastMessage } from './Modal'
 import { SettingsPage } from './SettingsPage'
@@ -26,8 +28,8 @@ export function AdminPanel({ onLoggedOut, onUnauthorized }: { onLoggedOut: () =>
       dashboardVersion={dashboardVersion}
       menu={
         <>
-          <MenuItem route={route} kind="admin-hosts" href={adminHref} icon="server" label={t('admin.hosts')} />
-          <MenuItem route={route} kind="admin-settings" href={adminSettingsHref} icon="gear" label={t('admin.settings')} />
+          <MenuItem route={route} kinds={['admin-hosts', 'admin-host']} href={adminHref} icon="server" label={t('admin.hosts')} />
+          <MenuItem route={route} kinds={['admin-settings']} href={adminSettingsHref} icon="gear" label={t('admin.settings')} />
         </>
       }
       right={<AccountMenu onLogout={() => setConfirmingLogout(true)} />}
@@ -36,6 +38,18 @@ export function AdminPanel({ onLoggedOut, onUnauthorized }: { onLoggedOut: () =>
       {!failed && !hosts && <p>{t('app.loading')}</p>}
       {hosts && route.kind === 'admin-hosts' && (
         <HostsPage hosts={hosts} dashboardVersion={dashboardVersion} reload={reload} toast={showToast} />
+      )}
+      {hosts && route.kind === 'admin-host' && (
+        <ErrorBoundary
+          key={route.id}
+          fallback={
+            <div className="ui error message" role="alert">
+              {t('app.error')}
+            </div>
+          }
+        >
+          <HostHistory hosts={hosts} id={route.id} />
+        </ErrorBoundary>
       )}
       {route.kind === 'admin-settings' && <SettingsPage dashboardVersion={dashboardVersion} toast={showToast} />}
       <Toast toast={toast} onDone={() => setToast(null)} />
@@ -49,6 +63,13 @@ export function AdminPanel({ onLoggedOut, onUnauthorized }: { onLoggedOut: () =>
       )}
     </AdminChrome>
   )
+}
+
+function HostHistory({ hosts, id }: { hosts: Host[]; id: string }) {
+  const { t } = useTranslation()
+  const host = hosts.find((h) => h.id === id)
+  if (!host) return <div className="ui message">{t('detail.notFound')}</div>
+  return <HistoryView host={host} name={displayName(host, t('status.unnamed'))} backHref={adminHref} />
 }
 
 type AdminChromeProps = {
@@ -71,7 +92,7 @@ export function AdminChrome({ dashboardVersion, menu, right, className = '', chi
       <nav className="ui large top fixed menu" aria-label={t('admin.panel')}>
         <div className="ui container">
           <a className="item nz-brand" href="/">
-            <Icon name="speedometer2" className="logo" />
+            <img className="logo" src="/favicon.svg" alt="" />
             {t('app.name')}
           </a>
           {menu}
@@ -102,9 +123,9 @@ export function AdminChrome({ dashboardVersion, menu, right, className = '', chi
   )
 }
 
-function MenuItem({ route, kind, href, icon, label }: { route: Route; kind: Route['kind']; href: string; icon: IconName; label: string }) {
+function MenuItem({ route, kinds, href, icon, label }: { route: Route; kinds: Route['kind'][]; href: string; icon: IconName; label: string }) {
   const [, navigate] = useRoute()
-  const active = route.kind === kind
+  const active = kinds.includes(route.kind)
   return (
     <a
       className={`item${active ? ' active' : ''}`}

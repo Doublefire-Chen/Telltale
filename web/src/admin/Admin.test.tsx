@@ -17,6 +17,7 @@ function host(h: Partial<Host> & Pick<Host, 'id'>): Host {
     country_override: '',
     group: '',
     hidden: false,
+    public_history: false,
     ...h,
   }
 }
@@ -133,12 +134,15 @@ describe('admin panel', () => {
     await user.type(country, 'jp')
     expect((country as HTMLInputElement).value).toBe('JP')
     await user.click(within(dialog).getByLabelText('Hide from the public Status page'))
+    const publicHistory = within(dialog).getByLabelText('Show its history on the public Status page') as HTMLInputElement
+    expect(publicHistory.checked).toBe(false)
+    await user.click(publicHistory)
     await user.click(within(dialog).getByRole('button', { name: 'Save' }))
 
     expect(dash.requests.at(-1)).toMatchObject({
       method: 'PATCH',
       path: '/api/hosts/h1',
-      body: { name: 'Tokyo', group: 'Asia', country_override: 'JP', hidden: true },
+      body: { name: 'Tokyo', group: 'Asia', country_override: 'JP', hidden: true, public_history: true },
     })
     expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Saved')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())

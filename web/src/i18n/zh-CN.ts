@@ -89,6 +89,7 @@ export const zhCN: Translation = {
     agent: 'Agent',
     state: '状态',
     hidden: '隐藏',
+    publicHistory: '公开历史',
     manage: '管理',
     yes: '是',
     no: '否',
@@ -96,6 +97,7 @@ export const zhCN: Translation = {
     outdated: '需升级',
     moveUp: '上移 {{name}}',
     moveDown: '下移 {{name}}',
+    history: '{{name}} 的历史数据',
     edit: '编辑 {{name}}',
     regenerate: '重新生成 {{name}} 的令牌',
     delete: '删除 {{name}}',
@@ -128,6 +130,8 @@ export const zhCN: Translation = {
     countryHint: '两位代码，如 JP。留空则使用 GeoIP。',
     invalidCountry: '请输入两位国家/地区代码，或留空。',
     hidden: '在公开状态页中隐藏',
+    publicHistory: '在公开状态页上显示它的历史数据',
+    publicHistoryHint: '默认关闭。仅在状态页公开且该主机未隐藏时生效。',
   },
   token: {
     addedTitle: '已添加主机“{{name}}”',
@@ -155,8 +159,10 @@ export const zhCN: Translation = {
   },
   detail: {
     back: '全部主机',
+    title: '{{name}} 的历史数据',
     range: '时间范围',
-    noData: '该时间范围内暂无历史数据。',
+    noData: '这个时间范围内还没有历史数据。',
+    notFound: '没有这台主机。',
   },
   footer: {
     poweredBy: '由 Telltale 驱动',

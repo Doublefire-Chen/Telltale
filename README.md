@@ -23,12 +23,16 @@ upstream release can never break your fleet on its own. See
   for CPU, memory, swap and disk, Bandwidth, Traffic, load, uptime, and process
   and connection counts, updating as Reports arrive (every 2 seconds by
   default); Offline within three missed intervals.
-- **History**: charts for 1 hour, 24 hours, 7 days and 30 days, kept in
-  SQLite as raw Reports, 1-minute and 15-minute averages.
+- **History**: charts of CPU, memory, swap, disk, bandwidth and load for 1
+  hour, 24 hours, 7 days and 30 days, kept in SQLite as raw Reports, 1-minute
+  and 15-minute averages. Only the admin sees them, unless a Host's history
+  is made public.
 - **Both IP addresses** of each Host and their countries, learned from the
   Agent's own connections to the Dashboard — no third-party lookups.
 - **Private by default**, or a public Status page that never shows IP
-  addresses or Hidden Hosts.
+  addresses or Hidden Hosts, and shows history only for the Hosts you choose.
+- **An admin panel** after Nezha V0's: Hosts in a table with batch actions,
+  one-time tokens with a ready-made install command, and settings.
 - **Upgrades never break a fleet**: old Agents keep working with new
   Dashboards, and the other way round ([protocol](docs/protocol.md)).
 - **Light**: the Agent is a single static binary needing no root; it uses

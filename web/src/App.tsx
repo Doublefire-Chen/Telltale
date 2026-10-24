@@ -69,7 +69,10 @@ export function App() {
   return (
     <>
       <header className="header">
-        <span className="brand">{t('app.name')}</span>
+        <span className="brand">
+          <img className="logo" src="/favicon.svg" alt="" />
+          {t('app.name')}
+        </span>
         <div className="header-actions">
           <LanguageToggle />
           {authenticated && (

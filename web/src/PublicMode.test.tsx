@@ -19,6 +19,7 @@ const visible: Host = {
   country_override: '',
   group: '',
   hidden: false,
+  public_history: false,
 }
 
 describe('public Status page', () => {
@@ -32,6 +33,8 @@ describe('public Status page', () => {
     await user.click(within(card).getByRole('button', { name: 'Details for tokyo' }))
     expect(within(card).queryByText('IPv4')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Admin panel' })).toBeNull()
+    // History is admin-only, so the name is not a link to it.
+    expect(within(card).queryByRole('link', { name: 'tokyo' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Log out' })).toBeNull()
   })
 
@@ -57,5 +60,15 @@ describe('public Status page', () => {
     render(<App />)
     expect(await screen.findByLabelText('Password')).toBeTruthy()
     expect(screen.queryByRole('article', { name: /tokyo/ })).toBeNull()
+  })
+
+  it('keeps anonymous visitors off a Host’s history page', async () => {
+    history.replaceState(null, '', '/hosts/h1')
+    const dash = stubDashboard({ statusPublic: true, hosts: [visible] })
+    render(<App />)
+
+    expect(await screen.findByRole('article', { name: /tokyo/ })).toBeTruthy()
+    expect(screen.queryByRole('figure')).toBeNull()
+    expect(dash.requests.some((r) => r.path.includes('/history'))).toBe(false)
   })
 })

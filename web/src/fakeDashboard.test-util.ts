@@ -8,6 +8,8 @@ export type FakeDashboardOptions = {
   authenticated?: boolean
   statusPublic?: boolean
   historyPoints?: number
+  /** Send empty history as v0.2.0 did: t is [] but every metric is null. */
+  historyNulls?: boolean
   hosts?: Host[]
 }
 
@@ -78,10 +80,13 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
         return json(200, { dashboard_version: 'v1.2.0', hosts: state.hosts })
       }
       const hist = path.match(/^\/api\/hosts\/([^/]+)\/history\?range=(\w+)$/)
-      if (hist && (state.authenticated || state.statusPublic)) {
+      // As the real Dashboard: the admin sees every Host's history; visitors of
+      // a public Status page only those made public and not Hidden.
+      const histHost = hist && state.hosts.find((h) => h.id === hist[1])
+      if (hist && (state.authenticated || (state.statusPublic && histHost?.public_history && !histHost.hidden))) {
         state.requests.push({ method, path, body })
         const n = state.historyPoints
-        const series = (v: number) => Array.from({ length: n }, () => v)
+        const series = (v: number) => (opts.historyNulls ? null : Array.from({ length: n }, () => v))
         return json(200, {
           range: hist[2],
           t: Array.from({ length: n }, (_, i) => 1_790_000_000 + i * 60),
@@ -115,6 +120,7 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
           country_override: '',
           group: '',
           hidden: false,
+          public_history: false,
         }
         state.hosts = [...state.hosts, host]
         return json(201, { id: host.id, name, token: 'tt_' + 'A'.repeat(43) })

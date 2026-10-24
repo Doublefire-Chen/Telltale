@@ -71,6 +71,7 @@ var migrations = []string{
 		PRIMARY KEY (host_id, t)
 	) WITHOUT ROWID;
 	CREATE INDEX metrics_15m_t ON metrics_15m (t);`,
+	`ALTER TABLE hosts ADD COLUMN public_history INTEGER NOT NULL DEFAULT 0;`,
 }
 
 // ErrInvalidOrder is returned by SetHostOrder when the IDs are not exactly the existing Hosts.
@@ -252,6 +253,9 @@ type Host struct {
 	Group string
 	// Hidden Hosts are left off the public Status page.
 	Hidden bool
+	// PublicHistory lets visitors of a public Status page see the Host's
+	// history, which is otherwise the admin's alone.
+	PublicHistory bool
 }
 
 // CreateHost registers a Host with the hash of its token.
@@ -263,14 +267,14 @@ func (s *Store) CreateHost(ctx context.Context, h Host, tokenHash []byte) error 
 	return err
 }
 
-const hostColumns = `id, name, created_at, host_info, ipv4, ipv4_seen_at, ipv6, ipv6_seen_at, country_override, group_name, hidden`
+const hostColumns = `id, name, created_at, host_info, ipv4, ipv4_seen_at, ipv6, ipv6_seen_at, country_override, group_name, hidden, public_history`
 
 func scanHost(scan func(...any) error) (Host, error) {
 	var h Host
 	var created, v4Seen, v6Seen int64
 	var info sql.NullString
 	var v4, v6 string
-	if err := scan(&h.ID, &h.Name, &created, &info, &v4, &v4Seen, &v6, &v6Seen, &h.CountryOverride, &h.Group, &h.Hidden); err != nil {
+	if err := scan(&h.ID, &h.Name, &created, &info, &v4, &v4Seen, &v6, &v6Seen, &h.CountryOverride, &h.Group, &h.Hidden, &h.PublicHistory); err != nil {
 		return Host{}, err
 	}
 	h.CreatedAt = time.Unix(created, 0)
@@ -335,7 +339,7 @@ func (s *Store) SetHostInfo(ctx context.Context, hostID string, info []byte, fro
 // HostUpdate changes some of a Host's Dashboard-side settings; nil fields stay as they are.
 type HostUpdate struct {
 	Name, Group, CountryOverride *string
-	Hidden                       *bool
+	Hidden, PublicHistory        *bool
 }
 
 // UpdateHost applies u to a Host. It reports whether the Host exists.
@@ -351,6 +355,7 @@ func (s *Store) UpdateHost(ctx context.Context, hostID string, u HostUpdate) (bo
 		{"group_name", deref(u.Group), u.Group != nil},
 		{"country_override", deref(u.CountryOverride), u.CountryOverride != nil},
 		{"hidden", u.Hidden != nil && *u.Hidden, u.Hidden != nil},
+		{"public_history", u.PublicHistory != nil && *u.PublicHistory, u.PublicHistory != nil},
 	} {
 		if f.set {
 			sets = append(sets, f.column+" = ?")
@@ -372,6 +377,18 @@ func deref(p *string) string {
 }
 
 // HostExists reports whether a Host with this ID exists.
+// HostByID returns the Host with this ID.
+func (s *Store) HostByID(ctx context.Context, hostID string) (Host, bool, error) {
+	h, err := scanHost(s.db.QueryRowContext(ctx, `SELECT `+hostColumns+` FROM hosts WHERE id = ?`, hostID).Scan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Host{}, false, nil
+	}
+	if err != nil {
+		return Host{}, false, err
+	}
+	return h, true, nil
+}
+
 func (s *Store) HostExists(ctx context.Context, hostID string) (bool, error) {
 	var one int
 	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM hosts WHERE id = ?`, hostID).Scan(&one)

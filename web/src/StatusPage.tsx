@@ -3,11 +3,11 @@ import { useTranslation } from 'react-i18next'
 import type { Host, HostInfo } from './api'
 import { Flags } from './Flag'
 import { formatBytes, formatCapacity, formatLoad, formatPercent, formatRate, formatUsage, unknown, uptimeParts } from './format'
-import { HostDetail } from './HostDetail'
+import { HistoryView } from './HistoryView'
 import { byGroup, displayName, useHosts } from './hosts'
 import { Icon, type IconName } from './Icon'
 import { OsLogo } from './OsLogo'
-import { hostHref, useRoute } from './route'
+import { followLink, publicHistoryHref, useRoute } from './route'
 
 type StatusPageProps = {
   /** The admin sees IP addresses and Hidden Hosts. */
@@ -18,16 +18,17 @@ type StatusPageProps = {
 
 export function StatusPage({ admin, onUnauthorized }: StatusPageProps) {
   const { t } = useTranslation()
-  const [route, navigate] = useRoute()
+  const [route] = useRoute()
   const { hosts, dashboardVersion, failed } = useHosts(onUnauthorized)
 
   if (failed) return <p role="alert">{t('app.error')}</p>
   if (!hosts) return <p>{t('app.loading')}</p>
   if (route.kind === 'host') {
-    const host = hosts.find((h) => h.id === route.id)
-    if (host) {
-      return <HostDetail host={host} name={displayName(host, t('status.unnamed'))} onBack={() => navigate('/')} />
-    }
+    // Every Host for the admin; for visitors only Hosts whose history is
+    // public. The Dashboard enforces the same rule, so this just avoids
+    // offering a page that would fail.
+    const host = hosts.find((h) => h.id === route.id && (admin || h.public_history))
+    if (host) return <HistoryView host={host} name={displayName(host, t('status.unnamed'))} backHref="/" />
   }
   return (
     <section className="stack">
@@ -35,7 +36,7 @@ export function StatusPage({ admin, onUnauthorized }: StatusPageProps) {
       {hosts.length === 0 ? (
         <p className="muted">{t('status.empty')}</p>
       ) : (
-        <HostGroups hosts={hosts} dashboardVersion={dashboardVersion} admin={admin} onOpen={(id) => navigate(hostHref(id))} />
+        <HostGroups hosts={hosts} dashboardVersion={dashboardVersion} admin={admin} />
       )}
     </section>
   )
@@ -45,11 +46,10 @@ type HostGroupsProps = {
   hosts: Host[]
   dashboardVersion: string
   admin: boolean
-  onOpen: (id: string) => void
 }
 
 /** HostGroups shows a collapsible panel of Host cards per group. */
-function HostGroups({ hosts, dashboardVersion, admin, onOpen }: HostGroupsProps) {
+function HostGroups({ hosts, dashboardVersion, admin }: HostGroupsProps) {
   const { t } = useTranslation()
   const now = Date.now()
   return (
@@ -68,7 +68,6 @@ function HostGroups({ hosts, dashboardVersion, admin, onOpen }: HostGroupsProps)
                 dashboardVersion={dashboardVersion}
                 now={now}
                 admin={admin}
-                onOpen={() => onOpen(h.id)}
               />
             ))}
           </div>
@@ -83,11 +82,11 @@ type HostCardProps = {
   dashboardVersion: string
   now: number
   admin: boolean
-  onOpen: () => void
 }
 
-function HostCard({ host: h, dashboardVersion, now, admin, onOpen }: HostCardProps) {
+function HostCard({ host: h, dashboardVersion, now, admin }: HostCardProps) {
   const { t, i18n } = useTranslation()
+  const [, navigate] = useRoute()
   const lang = i18n.resolvedLanguage ?? 'en'
   // Like Nezha's, the details popover opens on hover; a click pins it open.
   const [pinned, setPinned] = useState(false)
@@ -106,18 +105,15 @@ function HostCard({ host: h, dashboardVersion, now, admin, onOpen }: HostCardPro
         <h3 className="host-title">
           <Flags countries={h.countries} round />
           <OsLogo info={info} />
-          <a
-            id={nameId}
-            className="host-name"
-            href={hostHref(h.id)}
-            onClick={(e) => {
-              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-              e.preventDefault()
-              onOpen()
-            }}
-          >
-            {name}
-          </a>
+          {admin || h.public_history ? (
+            <a id={nameId} className="host-name" href={publicHistoryHref(h.id)} onClick={(e) => followLink(e, navigate)}>
+              {name}
+            </a>
+          ) : (
+            <span id={nameId} className="host-name">
+              {name}
+            </span>
+          )}
           <span className={`state ${state}`} role="img" aria-label={t(`status.${state}`)} title={t(`status.${state}`)}>
             {state !== 'online' && `[${t(`status.${state}Short`)}]`}
           </span>

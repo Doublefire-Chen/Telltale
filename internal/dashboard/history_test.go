@@ -176,6 +176,27 @@ func TestRetentionIsConfigurable(t *testing.T) {
 	h.eventually(session, host.ID, "30d", func(b historyBody) bool { return len(b.T) == 0 })
 }
 
+// TestEmptyHistoryHasEveryColumn guards the web app, which charts each column:
+// a range without samples must give [] for each, never null.
+func TestEmptyHistoryHasEveryColumn(t *testing.T) {
+	h, _ := historyHarness(t, store.Retention{})
+	h.setPassword(testPassword)
+	session := h.loginOK()
+	host := h.addHost(session, "quiet")
+
+	resp := h.do(http.MethodGet, "/api/hosts/"+host.ID+"/history?range=30d", "", session)
+	expectStatus(t, resp, http.StatusOK)
+	var body map[string]json.RawMessage
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	for _, col := range []string{"t", "cpu", "memory", "swap", "disk", "rx_rate", "tx_rate", "load1"} {
+		if string(body[col]) != "[]" {
+			t.Errorf("%s = %s, want []", col, body[col])
+		}
+	}
+}
+
 func TestHistoryAccess(t *testing.T) {
 	h, _ := historyHarness(t, store.Retention{})
 	h.setPassword(testPassword)
@@ -188,10 +209,26 @@ func TestHistoryAccess(t *testing.T) {
 	expectError(t, h.do(http.MethodGet, "/api/hosts/nope/history?range=1h", "", session), http.StatusNotFound, "not_found")
 	expectError(t, h.do(http.MethodGet, "/api/hosts/"+visible.ID+"/history?range=1h", "", nil), http.StatusUnauthorized, "unauthenticated")
 
+	// On a public Status page, visitors see only the history the admin made
+	// public, and never a Hidden Host's.
 	h.setPublic(session, true)
-	expectStatus(t, h.do(http.MethodGet, "/api/hosts/"+visible.ID+"/history?range=1h", "", nil), http.StatusOK)
-	expectError(t, h.do(http.MethodGet, "/api/hosts/"+hidden.ID+"/history?range=1h", "", nil), http.StatusNotFound, "not_found")
-	expectStatus(t, h.do(http.MethodGet, "/api/hosts/"+hidden.ID+"/history?range=1h", "", session), http.StatusOK)
+	historyOf := func(id string, c *http.Cookie) *http.Response {
+		return h.do(http.MethodGet, "/api/hosts/"+id+"/history?range=1h", "", c)
+	}
+	expectError(t, historyOf(visible.ID, nil), http.StatusNotFound, "not_found")
+	expectStatus(t, h.patchHost(session, visible.ID, map[string]any{"public_history": true}), http.StatusNoContent)
+	expectStatus(t, historyOf(visible.ID, nil), http.StatusOK)
+	expectStatus(t, h.patchHost(session, hidden.ID, map[string]any{"public_history": true}), http.StatusNoContent)
+	expectError(t, historyOf(hidden.ID, nil), http.StatusNotFound, "not_found")
+
+	// Making the page private again closes it to visitors, public history or not.
+	h.setPublic(session, false)
+	expectError(t, historyOf(visible.ID, nil), http.StatusUnauthorized, "unauthenticated")
+
+	// The admin sees every Host's history.
+	expectStatus(t, h.patchHost(session, visible.ID, map[string]any{"public_history": false}), http.StatusNoContent)
+	expectStatus(t, historyOf(visible.ID, session), http.StatusOK)
+	expectStatus(t, historyOf(hidden.ID, session), http.StatusOK)
 }
 
 func TestLatestStateSurvivesRestart(t *testing.T) {

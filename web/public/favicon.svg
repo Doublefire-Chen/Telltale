@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Telltale's mark: a gauge, in white on Telltale blue. Bold enough to read at 16px. -->
+  <rect width="32" height="32" rx="7" fill="#0338d6"/>
+  <g fill="none" stroke="#fff" stroke-linecap="round">
+    <path d="M7.34 23.5A10 10 0 1 1 24.66 23.5" stroke-width="3.2"/>
+    <path d="M16 18.5L21.6 12.4" stroke-width="3"/>
+  </g>
+  <circle cx="16" cy="18.5" r="2.8" fill="#fff"/>
+</svg>

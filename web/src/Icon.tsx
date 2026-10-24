@@ -25,12 +25,13 @@ const iconUrls = import.meta.glob<string>(
     '/node_modules/bootstrap-icons/icons/clipboard.svg',
     '/node_modules/bootstrap-icons/icons/check-lg.svg',
     '/node_modules/bootstrap-icons/icons/house.svg',
+    '/node_modules/bootstrap-icons/icons/graph-up.svg',
+    '/node_modules/bootstrap-icons/icons/arrow-left.svg',
     '/node_modules/bootstrap-icons/icons/box-arrow-left.svg',
     '/node_modules/bootstrap-icons/icons/person-circle.svg',
     '/node_modules/bootstrap-icons/icons/collection.svg',
     '/node_modules/bootstrap-icons/icons/chevron-down.svg',
     '/node_modules/bootstrap-icons/icons/x-lg.svg',
-    '/node_modules/bootstrap-icons/icons/speedometer2.svg',
     '/node_modules/bootstrap-icons/icons/ubuntu.svg',
     '/node_modules/bootstrap-icons/icons/windows.svg',
     '/node_modules/bootstrap-icons/icons/apple.svg',
@@ -62,12 +63,13 @@ export type IconName =
   | 'clipboard'
   | 'check-lg'
   | 'house'
+  | 'graph-up'
+  | 'arrow-left'
   | 'box-arrow-left'
   | 'person-circle'
   | 'collection'
   | 'chevron-down'
   | 'x-lg'
-  | 'speedometer2'
   | 'ubuntu'
   | 'windows'
   | 'apple'

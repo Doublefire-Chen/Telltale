@@ -5,6 +5,7 @@ import { Flags } from '../Flag'
 import { byGroup, displayName } from '../hosts'
 import { Icon, type IconName } from '../Icon'
 import { OsLogo } from '../OsLogo'
+import { hostHistoryHref, useRoute } from '../route'
 import { HostForm, TokenModal } from './HostForm'
 import { Confirm, Modal, type ToastMessage } from './Modal'
 
@@ -26,6 +27,7 @@ type HostsPageProps = {
 /** HostsPage is the admin's table of Hosts, after Nezha V0's server page. */
 export function HostsPage({ hosts, dashboardVersion, reload, toast }: HostsPageProps) {
   const { t } = useTranslation()
+  const [, navigate] = useRoute()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const [busy, setBusy] = useState(false)
@@ -112,13 +114,14 @@ export function HostsPage({ hosts, dashboardVersion, reload, toast }: HostsPageP
               <th>{t('admin.agent')}</th>
               <th>{t('admin.state')}</th>
               <th>{t('admin.hidden')}</th>
+              <th>{t('admin.publicHistory')}</th>
               <th>{t('admin.manage')}</th>
             </tr>
           </thead>
           <tbody>
             {ordered.length === 0 && (
               <tr>
-                <td colSpan={10} className="empty">
+                <td colSpan={11} className="empty">
                   {t('admin.empty')}
                 </td>
               </tr>
@@ -171,8 +174,10 @@ export function HostsPage({ hosts, dashboardVersion, reload, toast }: HostsPageP
                     </span>
                   </td>
                   <td>{h.hidden ? t('admin.yes') : t('admin.no')}</td>
+                  <td>{h.public_history ? t('admin.yes') : t('admin.no')}</td>
                   <td>
                     <div className="ui mini buttons">
+                      <IconButton icon="graph-up" label={t('admin.history', { name })} onClick={() => navigate(hostHistoryHref(h.id))} />
                       <IconButton icon="arrow-up" label={t('admin.moveUp', { name })} disabled={busy || i === 0} onClick={() => void move(h.id, -1)} />
                       <IconButton
                         icon="arrow-down"
