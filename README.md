@@ -126,8 +126,10 @@ runs the new binary itself. To upgrade, run it again with just `--version` or
 & "C:\Program Files\Telltale\telltale-agent.exe" service install
 ```
 
-It runs as LocalService; its logs are in the Event Viewer. It refuses to
-install an exe outside Program Files, where other users might replace it.
+It runs as its own virtual account, `NT SERVICE\telltale-agent`, the only
+account (besides SYSTEM and Administrators) that can read the config. Its
+logs are in the Event Viewer. It refuses to install an exe outside Program
+Files, where other users might replace it.
 
 **macOS** — put `telltale-agent` in `/usr/local/bin/`, save the config as
 `/etc/telltale/agent.toml`, then:

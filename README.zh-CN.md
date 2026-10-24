@@ -114,7 +114,7 @@ sudo sh install.sh install --dashboard-url https://status.example.com --version 
 & "C:\Program Files\Telltale\telltale-agent.exe" service install
 ```
 
-它以 LocalService 身份运行，日志在事件查看器中。如果 exe 不在 Program Files 下
+它以自己的虚拟账户 `NT SERVICE\telltale-agent` 运行，除 SYSTEM 和 Administrators 外只有它能读取配置文件。日志在事件查看器中。如果 exe 不在 Program Files 下
 （其他用户可能替换它），它会拒绝安装。
 
 **macOS** —— 把 `telltale-agent` 放到 `/usr/local/bin/`，把配置保存为

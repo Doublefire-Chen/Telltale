@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf16"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
@@ -21,17 +24,37 @@ import (
 
 const serviceName = "telltale-agent"
 
+// serviceAccount is the virtual account the Agent runs as. Unlike the shared
+// LocalService, no other service runs as it, so granting it the config shares
+// the Host token with no one else.
+const serviceAccount = `NT SERVICE\` + serviceName
+
 // configSDDL makes Administrators the owner of the config file and lets only
-// SYSTEM and Administrators (full control) and the LocalService account the
-// Agent runs as (read) open it, since it holds the Host token. P: inherited
+// SYSTEM and Administrators (full control) and the Agent's account (read, %s
+// is its SID) open it, since it holds the Host token. P: inherited
 // permissions are not applied. Without the owner change, a non-admin who
 // created the file could still rewrite its permissions.
-const configSDDL = "O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;LS)"
+const configSDDL = "O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;%s)"
 
 // configDirSDDL does the same for the config's folder, so no one else can
 // delete the config and put their own in its place. OICI: files and folders
 // inside inherit it.
-const configDirSDDL = "O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FR;;;LS)"
+const configDirSDDL = "O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FR;;;%s)"
+
+// serviceSID is the SID of the account NT SERVICE\name: S-1-5-80 followed by
+// the SHA-1 of the upper-cased name in UTF-16LE, as five little-endian words.
+// Windows derives it the same way, so it is known before the service exists
+// and the config can be locked down before the Agent first starts.
+func serviceSID(name string) string {
+	h := sha1.New()
+	binary.Write(h, binary.LittleEndian, utf16.Encode([]rune(strings.ToUpper(name))))
+	sum := h.Sum(nil)
+	sid := "S-1-5-80"
+	for i := 0; i < len(sum); i += 4 {
+		sid += fmt.Sprintf("-%d", binary.LittleEndian.Uint32(sum[i:]))
+	}
+	return sid
+}
 
 func installService(configPath string) error {
 	exe, err := os.Executable()
@@ -46,20 +69,21 @@ func installService(configPath string) error {
 	if !insideProgramFiles(exe) {
 		return fmt.Errorf(`%s is outside Program Files, where other users may be able to replace it; move it to C:\Program Files\Telltale first`, exe)
 	}
+	sid := serviceSID(serviceName)
 	// The folder only if it is Telltale's own: a config kept elsewhere may
 	// share its folder with files that need other permissions.
 	if dir := filepath.Dir(configPath); strings.EqualFold(dir, filepath.Dir(agent.DefaultConfigPath())) {
-		if err := restrict(dir, configDirSDDL); err != nil {
+		if err := restrict(dir, fmt.Sprintf(configDirSDDL, sid)); err != nil {
 			return fmt.Errorf("restrict %s: %w", dir, err)
 		}
 		fmt.Printf("made %s owned by Administrators and writable only by them (and SYSTEM)\n", dir)
 	} else {
 		fmt.Printf("note: make sure only Administrators can change %s, or move the config to %s\n", dir, agent.DefaultConfigPath())
 	}
-	if err := restrict(configPath, configSDDL); err != nil {
+	if err := restrict(configPath, fmt.Sprintf(configSDDL, sid)); err != nil {
 		return fmt.Errorf("restrict %s: %w", configPath, err)
 	}
-	fmt.Printf("made %s owned by Administrators and readable only by LocalService (and SYSTEM, Administrators)\n", configPath)
+	fmt.Printf("made %s owned by Administrators and readable only by %s (and SYSTEM, Administrators)\n", configPath, serviceAccount)
 
 	m, err := mgr.Connect()
 	if err != nil {
@@ -74,7 +98,8 @@ func installService(configPath string) error {
 		DisplayName:      "Telltale Agent",
 		Description:      "Reports this Host's metrics to a Telltale Dashboard.",
 		StartType:        mgr.StartAutomatic,
-		ServiceStartName: `NT AUTHORITY\LocalService`,
+		ServiceStartName: serviceAccount,
+		SidType:          windows.SERVICE_SID_TYPE_UNRESTRICTED,
 	}, "-config", configPath)
 	if err != nil {
 		return err
@@ -88,7 +113,7 @@ func installService(configPath string) error {
 		!strings.Contains(err.Error(), "exists") {
 		return err
 	}
-	fmt.Printf("registered service %s (runs as LocalService)\n", serviceName)
+	fmt.Printf("registered service %s (runs as %s)\n", serviceName, serviceAccount)
 	if err := s.Start(); err != nil {
 		return err
 	}

@@ -121,8 +121,8 @@ func TestServiceInstallReportsAndUninstalls(t *testing.T) {
 	switch runtime.GOOS {
 	case "windows":
 		out, _ := exec.Command("sc.exe", "qc", "telltale-agent").CombinedOutput()
-		if !strings.Contains(string(out), `NT AUTHORITY\LocalService`) {
-			t.Errorf("service does not run as LocalService:\n%s", out)
+		if !strings.Contains(string(out), `NT SERVICE\telltale-agent`) {
+			t.Errorf("service does not run as NT SERVICE\\telltale-agent:\n%s", out)
 		}
 	case "darwin":
 		out, _ := exec.Command("ps", "-axo", "user=,comm=").CombinedOutput()
