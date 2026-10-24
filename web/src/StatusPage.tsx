@@ -1,31 +1,16 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  type AddedHost,
-  addHost,
-  ApiError,
-  getSettings,
-  getStatus,
-  type Host,
-  type HostInfo,
-  type LiveMessage,
-  liveURL,
-  saveSettings,
-  setHostOrder,
-} from './api'
+import type { Host, HostInfo } from './api'
 import { Flags } from './Flag'
 import { formatBytes, formatCapacity, formatLoad, formatPercent, formatRate, formatUsage, unknown, uptimeParts } from './format'
 import { HostDetail } from './HostDetail'
-import { HostSettings } from './HostSettings'
+import { byGroup, displayName, useHosts } from './hosts'
 import { Icon, type IconName } from './Icon'
 import { OsLogo } from './OsLogo'
 import { hostHref, useRoute } from './route'
-import { TokenReveal } from './TokenReveal'
-
-const reconnectDelayMs = 2000
 
 type StatusPageProps = {
-  /** The admin sees IP addresses, Hidden Hosts and management controls. */
+  /** The admin sees IP addresses and Hidden Hosts. */
   admin: boolean
   /** Called when the Dashboard refuses access, e.g. the page just went private. */
   onUnauthorized: () => void
@@ -34,36 +19,7 @@ type StatusPageProps = {
 export function StatusPage({ admin, onUnauthorized }: StatusPageProps) {
   const { t } = useTranslation()
   const [route, navigate] = useRoute()
-  const [hosts, setHosts] = useState<Host[] | null>(null)
-  const [dashboardVersion, setDashboardVersion] = useState('')
-  const [failed, setFailed] = useState(false)
-
-  const load = useCallback(async () => {
-    try {
-      const status = await getStatus()
-      setHosts(status.hosts)
-      setDashboardVersion(status.dashboard_version)
-      setFailed(false)
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        onUnauthorized()
-        return
-      }
-      setFailed(true)
-    }
-  }, [onUnauthorized])
-
-  useLiveUpdates(load, (msg) => {
-    if (msg.type === 'hosts_changed') {
-      void load()
-      return
-    }
-    if (msg.type === 'offline') {
-      setHosts((prev) => prev?.map((h) => (h.id === msg.host_id ? { ...h, online: false } : h)) ?? prev)
-      return
-    }
-    setHosts((prev) => prev?.map((h) => (h.id === msg.host_id ? { ...h, report: msg.report, online: true } : h)) ?? prev)
-  })
+  const { hosts, dashboardVersion, failed } = useHosts(onUnauthorized)
 
   if (failed) return <p role="alert">{t('app.error')}</p>
   if (!hosts) return <p>{t('app.loading')}</p>
@@ -79,121 +35,26 @@ export function StatusPage({ admin, onUnauthorized }: StatusPageProps) {
       {hosts.length === 0 ? (
         <p className="muted">{t('status.empty')}</p>
       ) : (
-        <HostGroups
-          hosts={hosts}
-          dashboardVersion={dashboardVersion}
-          onChanged={load}
-          admin={admin}
-          onOpen={(id) => navigate(hostHref(id))}
-        />
-      )}
-      {admin && (
-        <div className="admin-panels">
-          <AddHost onAdded={load} />
-          <DashboardSettings />
-        </div>
+        <HostGroups hosts={hosts} dashboardVersion={dashboardVersion} admin={admin} onOpen={(id) => navigate(hostHref(id))} />
       )}
     </section>
   )
 }
 
-/**
- * useLiveUpdates loads the full state, then applies messages from the live
- * WebSocket. After a disconnect it reconnects and reloads, so nothing missed
- * while offline goes stale.
- */
-function useLiveUpdates(load: () => Promise<void>, onMessage: (msg: LiveMessage) => void) {
-  const handler = useRef(onMessage)
-  handler.current = onMessage
-
-  useEffect(() => {
-    let socket: WebSocket | null = null
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let stopped = false
-
-    function connect() {
-      void load()
-      socket = new WebSocket(liveURL())
-      socket.onmessage = (e) => handler.current(JSON.parse(String(e.data)) as LiveMessage)
-      socket.onclose = () => {
-        if (!stopped) timer = setTimeout(connect, reconnectDelayMs)
-      }
-    }
-    connect()
-    return () => {
-      stopped = true
-      clearTimeout(timer)
-      socket?.close()
-    }
-  }, [load])
-}
-
 type HostGroupsProps = {
   hosts: Host[]
   dashboardVersion: string
-  onChanged: () => Promise<void>
   admin: boolean
   onOpen: (id: string) => void
 }
 
-/**
- * byGroup orders Hosts for display: groups in the order their first Host
- * appears, each Host keeping the admin's order within its group.
- */
-function byGroup(hosts: Host[]): { group: string; hosts: Host[] }[] {
-  const groups: { group: string; hosts: Host[] }[] = []
-  for (const h of hosts) {
-    let g = groups.find((x) => x.group === h.group)
-    if (!g) groups.push((g = { group: h.group, hosts: [] }))
-    g.hosts.push(h)
-  }
-  return groups
-}
-
 /** HostGroups shows a collapsible panel of Host cards per group. */
-function HostGroups({ hosts, dashboardVersion, onChanged, admin, onOpen }: HostGroupsProps) {
+function HostGroups({ hosts, dashboardVersion, admin, onOpen }: HostGroupsProps) {
   const { t } = useTranslation()
-  const [openSettings, setOpenSettings] = useState<string | null>(null)
-  const settingsRef = useRef<HTMLDivElement>(null)
   const now = Date.now()
-  const groups = byGroup(hosts)
-  // Moving swaps a Host with its neighbour as displayed, then saves that order.
-  const displayed = groups.flatMap((g) => g.hosts)
-
-  async function move(id: string, direction: -1 | 1) {
-    const ids = displayed.map((h) => h.id)
-    const i = ids.indexOf(id)
-    const j = i + direction
-    if (i < 0 || j < 0 || j >= ids.length) return
-    ;[ids[i], ids[j]] = [ids[j], ids[i]]
-    await setHostOrder(ids)
-    await onChanged()
-  }
-
-  const editing = displayed.find((h) => h.id === openSettings)
-  const editingIndex = editing ? displayed.indexOf(editing) : -1
-
-  useEffect(() => {
-    if (openSettings) settingsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
-  }, [openSettings])
-
   return (
     <>
-      {editing && (
-        <div ref={settingsRef} className="settings-anchor">
-          <HostSettings
-            key={editing.id}
-            host={editing}
-            displayName={displayName(editing, t('status.unnamed'))}
-            canMoveUp={editingIndex > 0}
-            canMoveDown={editingIndex < displayed.length - 1}
-            onMove={(direction) => move(editing.id, direction)}
-            onClose={() => setOpenSettings(null)}
-            onChanged={onChanged}
-          />
-        </div>
-      )}
-      {groups.map((g) => (
+      {byGroup(hosts).map((g) => (
         <details key={g.group} className="group" open>
           <summary>
             <h2>{g.group || t('status.defaultGroup')}</h2>
@@ -208,8 +69,6 @@ function HostGroups({ hosts, dashboardVersion, onChanged, admin, onOpen }: HostG
                 now={now}
                 admin={admin}
                 onOpen={() => onOpen(h.id)}
-                settingsOpen={openSettings === h.id}
-                onToggleSettings={() => setOpenSettings(openSettings === h.id ? null : h.id)}
               />
             ))}
           </div>
@@ -225,16 +84,9 @@ type HostCardProps = {
   now: number
   admin: boolean
   onOpen: () => void
-  settingsOpen: boolean
-  onToggleSettings: () => void
 }
 
-/** displayName is what the Status page calls a Host: its name, else its hostname. */
-function displayName(h: Host, unnamed: string): string {
-  return h.name || h.host_info?.hostname || unnamed
-}
-
-function HostCard({ host: h, dashboardVersion, now, admin, onOpen, settingsOpen, onToggleSettings }: HostCardProps) {
+function HostCard({ host: h, dashboardVersion, now, admin, onOpen }: HostCardProps) {
   const { t, i18n } = useTranslation()
   const lang = i18n.resolvedLanguage ?? 'en'
   // Like Nezha's, the details popover opens on hover; a click pins it open.
@@ -271,18 +123,6 @@ function HostCard({ host: h, dashboardVersion, now, admin, onOpen, settingsOpen,
           </span>
         </h3>
         <div className="card-actions" onMouseLeave={() => setHovered(false)}>
-          {admin && (
-            <button
-              type="button"
-              className="card-icon settings"
-              aria-expanded={settingsOpen}
-              aria-label={t('status.settings', { name })}
-              title={t('status.settings', { name })}
-              onClick={onToggleSettings}
-            >
-              <Icon name="gear-fill" />
-            </button>
-          )}
           <span className="info-anchor">
             <button
               type="button"
@@ -488,103 +328,5 @@ function InOut({ inValue, outValue, filled = false }: { inValue: string; outValu
         {outValue}
       </span>
     </span>
-  )
-}
-
-function AddHost({ onAdded }: { onAdded: () => Promise<void> }) {
-  const { t } = useTranslation()
-  const [name, setName] = useState('')
-  const [error, setError] = useState<'invalid_name' | 'error' | null>(null)
-  const [added, setAdded] = useState<AddedHost | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  async function submit(e: FormEvent) {
-    e.preventDefault()
-    setBusy(true)
-    setError(null)
-    try {
-      setAdded(await addHost(name))
-      setName('')
-      await onAdded()
-    } catch (err) {
-      setError(err instanceof ApiError && err.code === 'invalid_name' ? 'invalid_name' : 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (added) {
-    return (
-      <TokenReveal
-        title={t('addHost.addedTitle', { name: added.name || t('status.unnamed') })}
-        token={added.token}
-        onDone={() => setAdded(null)}
-      />
-    )
-  }
-  return (
-    <form className="card" onSubmit={(e) => void submit(e)}>
-      <h2>{t('addHost.title')}</h2>
-      <label>
-        {t('addHost.name')}
-        <input name="name" value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
-        <span className="muted hint">{t('addHost.nameHint')}</span>
-      </label>
-      {error && (
-        <p role="alert" className="error">
-          {error === 'invalid_name' ? t('addHost.invalidName') : t('app.error')}
-        </p>
-      )}
-      <button type="submit" disabled={busy}>
-        {t('addHost.submit')}
-      </button>
-    </form>
-  )
-}
-
-/** DashboardSettings holds settings for the whole Dashboard, such as public mode. */
-function DashboardSettings() {
-  const { t } = useTranslation()
-  const [statusPublic, setStatusPublic] = useState<boolean | null>(null)
-  const [state, setState] = useState<'idle' | 'saved' | 'error'>('idle')
-
-  useEffect(() => {
-    getSettings().then(
-      (s) => setStatusPublic(s.status_public),
-      () => setState('error'),
-    )
-  }, [])
-
-  async function toggle(value: boolean) {
-    setStatusPublic(value)
-    try {
-      await saveSettings({ status_public: value })
-      setState('saved')
-    } catch {
-      setStatusPublic(!value)
-      setState('error')
-    }
-  }
-
-  return (
-    <section className="card">
-      <h2>{t('dashboardSettings.title')}</h2>
-      <label className="checkbox">
-        <input
-          type="checkbox"
-          checked={statusPublic ?? false}
-          disabled={statusPublic === null}
-          onChange={(e) => void toggle(e.target.checked)}
-        />
-        {t('dashboardSettings.public')}
-      </label>
-      <span className="muted hint">{t('dashboardSettings.publicHint')}</span>
-      {state === 'saved' && <span className="muted hint">{t('dashboardSettings.saved')}</span>}
-      {state === 'error' && (
-        <p role="alert" className="error">
-          {t('app.error')}
-        </p>
-      )}
-    </section>
   )
 }

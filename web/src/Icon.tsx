@@ -14,6 +14,26 @@ const iconUrls = import.meta.glob<string>(
     '/node_modules/bootstrap-icons/icons/gear-fill.svg',
     '/node_modules/bootstrap-icons/icons/box-arrow-in-right.svg',
     '/node_modules/bootstrap-icons/icons/box-arrow-right.svg',
+    '/node_modules/bootstrap-icons/icons/server.svg',
+    '/node_modules/bootstrap-icons/icons/gear.svg',
+    '/node_modules/bootstrap-icons/icons/pencil-square.svg',
+    '/node_modules/bootstrap-icons/icons/trash3.svg',
+    '/node_modules/bootstrap-icons/icons/plus-lg.svg',
+    '/node_modules/bootstrap-icons/icons/key.svg',
+    '/node_modules/bootstrap-icons/icons/arrow-up.svg',
+    '/node_modules/bootstrap-icons/icons/arrow-down.svg',
+    '/node_modules/bootstrap-icons/icons/clipboard.svg',
+    '/node_modules/bootstrap-icons/icons/check-lg.svg',
+    '/node_modules/bootstrap-icons/icons/house.svg',
+    '/node_modules/bootstrap-icons/icons/box-arrow-left.svg',
+    '/node_modules/bootstrap-icons/icons/person-circle.svg',
+    '/node_modules/bootstrap-icons/icons/collection.svg',
+    '/node_modules/bootstrap-icons/icons/chevron-down.svg',
+    '/node_modules/bootstrap-icons/icons/x-lg.svg',
+    '/node_modules/bootstrap-icons/icons/speedometer2.svg',
+    '/node_modules/bootstrap-icons/icons/ubuntu.svg',
+    '/node_modules/bootstrap-icons/icons/windows.svg',
+    '/node_modules/bootstrap-icons/icons/apple.svg',
   ],
   { query: '?url', import: 'default', eager: true },
 )
@@ -31,6 +51,26 @@ export type IconName =
   | 'gear-fill'
   | 'box-arrow-in-right'
   | 'box-arrow-right'
+  | 'server'
+  | 'gear'
+  | 'pencil-square'
+  | 'trash3'
+  | 'plus-lg'
+  | 'key'
+  | 'arrow-up'
+  | 'arrow-down'
+  | 'clipboard'
+  | 'check-lg'
+  | 'house'
+  | 'box-arrow-left'
+  | 'person-circle'
+  | 'collection'
+  | 'chevron-down'
+  | 'x-lg'
+  | 'speedometer2'
+  | 'ubuntu'
+  | 'windows'
+  | 'apple'
 
 /** Icon is decorative: whatever it stands for must also be said in text. */
 export function Icon({ name, className = '' }: { name: IconName; className?: string }) {

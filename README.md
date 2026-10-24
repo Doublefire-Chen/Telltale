@@ -92,10 +92,11 @@ both of a Host's addresses. An IPv4-only Dashboard only ever shows IPv4.
 
 ### 2. Add a Host
 
-Log in, type a name under **Add Host** (or leave it blank to use the
-machine's hostname), and copy the config it shows. The Host token in it is
-shown **only once**; the Dashboard keeps just its hash. You can regenerate it
-later, which immediately revokes the old one.
+Log in, open the **Admin panel** and click **Add Host** (leave the name blank
+to use the machine's hostname). It shows the Host token with a ready-made
+Linux install command and the Agent config, **only once**; the Dashboard keeps
+just its hash. You can regenerate the token later, which immediately revokes
+the old one.
 
 ### 3. The Agent
 

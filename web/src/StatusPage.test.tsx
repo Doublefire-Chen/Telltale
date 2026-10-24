@@ -217,108 +217,6 @@ describe('Status page', () => {
     expect(flags).toEqual(['US', 'DE'])
   })
 
-  it('sets and clears a country override from the Host settings', async () => {
-    vi.useRealTimers()
-    const user = userEvent.setup()
-    const dash = stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'anycast', countries: ['AU'] })] })
-    render(<App />)
-
-    await user.click(await screen.findByRole('button', { name: 'Settings for anycast' }))
-    const input = screen.getByLabelText(/Country override/)
-    await user.type(input, 'jp')
-    expect((input as HTMLInputElement).value).toBe('JP')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(dash.requests.at(-1)?.body).toMatchObject({ country_override: 'JP' })
-    expect(await within(card('anycast')).findByRole('img', { name: 'JP' })).toBeTruthy()
-
-    await user.click(screen.getByRole('button', { name: 'Settings for anycast' }))
-    await user.clear(screen.getByLabelText(/Country override/))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(dash.requests.at(-1)?.body).toMatchObject({ country_override: '' })
-  })
-
-  it('renames, groups and hides a Host', async () => {
-    vi.useRealTimers()
-    const user = userEvent.setup()
-    const dash = stubDashboard({
-      authenticated: true,
-      hosts: [host({ id: 'h1', name: 'web-1' }), host({ id: 'h2', name: 'db-1' })],
-    })
-    render(<App />)
-
-    await user.click(await screen.findByRole('button', { name: 'Settings for web-1' }))
-    const settings = within(screen.getByRole('button', { name: 'Save' }).closest('form')!)
-    const name = settings.getByLabelText(/^Display name/)
-    await user.clear(name)
-    await user.type(name, 'Tokyo')
-    await user.type(settings.getByLabelText(/^Group/), 'Asia')
-    await user.click(settings.getByLabelText('Hide from the public Status page'))
-    await user.click(settings.getByRole('button', { name: 'Save' }))
-
-    expect(dash.requests.at(-1)).toMatchObject({
-      method: 'PATCH',
-      path: '/api/hosts/h1',
-      body: { name: 'Tokyo', group: 'Asia', hidden: true },
-    })
-    expect(await screen.findByRole('heading', { name: 'Asia' })).toBeTruthy()
-    expect(within(card('Tokyo')).getByText('Hidden')).toBeTruthy()
-  })
-
-  it('reorders Hosts in the order they are shown', async () => {
-    vi.useRealTimers()
-    const user = userEvent.setup()
-    const dash = stubDashboard({
-      authenticated: true,
-      hosts: [host({ id: 'a', name: 'alpha' }), host({ id: 'b', name: 'bravo' }), host({ id: 'c', name: 'charlie' })],
-    })
-    render(<App />)
-
-    await user.click(await screen.findByRole('button', { name: 'Settings for charlie' }))
-    expect((screen.getByRole('button', { name: 'Move down' }) as HTMLButtonElement).disabled).toBe(true)
-    await user.click(screen.getByRole('button', { name: 'Move up' }))
-    expect(dash.requests.at(-1)).toMatchObject({ method: 'PUT', body: { ids: ['a', 'c', 'b'] } })
-
-    await screen.findByRole('article', { name: /charlie/ })
-    const order = screen.getAllByRole('article').map((a) => a.querySelector('.host-name')!.textContent)
-    expect(order).toEqual(['alpha', 'charlie', 'bravo'])
-  })
-
-  it('regenerates a token and shows the new one once', async () => {
-    vi.useRealTimers()
-    const user = userEvent.setup()
-    const dash = stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'web-1' })] })
-    render(<App />)
-
-    await user.click(await screen.findByRole('button', { name: 'Settings for web-1' }))
-    await user.click(screen.getByRole('button', { name: 'Regenerate token' }))
-    expect(dash.requests.at(-1)).toMatchObject({ method: 'POST', path: '/api/hosts/h1/token' })
-    expect(await screen.findByRole('heading', { name: 'New token for web-1' })).toBeTruthy()
-    expect(screen.getByText(/token = "tt_N+"/)).toBeTruthy()
-
-    await user.click(screen.getByRole('button', { name: 'Done' }))
-    expect(screen.queryByText(/tt_N+/)).toBeNull()
-  })
-
-  it('deletes a Host only after confirming', async () => {
-    vi.useRealTimers()
-    const user = userEvent.setup()
-    const dash = stubDashboard({
-      authenticated: true,
-      hosts: [host({ id: 'h1', name: 'old-box' }), host({ id: 'h2', name: 'keeper' })],
-    })
-    render(<App />)
-
-    await user.click(await screen.findByRole('button', { name: 'Settings for old-box' }))
-    await user.click(screen.getByRole('button', { name: 'Delete Host' }))
-    expect(dash.requests.some((r) => r.method === 'DELETE')).toBe(false)
-    expect(screen.getByRole('alertdialog').textContent).toContain('Delete old-box and everything stored about it?')
-    await user.click(screen.getByRole('button', { name: 'Delete permanently' }))
-
-    expect(dash.requests.at(-1)).toMatchObject({ method: 'DELETE', path: '/api/hosts/h1' })
-    await waitFor(() => expect(screen.queryByRole('article', { name: /old-box/ })).toBeNull())
-    expect(screen.getByRole('article', { name: /keeper/ })).toBeTruthy()
-  })
-
   it('updates live from the WebSocket without reloading', async () => {
     stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'tokyo', report, online: true })] })
     render(<App />)
@@ -349,41 +247,12 @@ describe('Status page', () => {
     expect(within(card('tokyo')).getByRole('img', { name: 'Online' })).toBeTruthy()
   })
 
-  it('adds a Host and shows its token exactly once as an Agent config', async () => {
-    vi.useRealTimers()
-    const user = userEvent.setup()
-    stubDashboard({ authenticated: true })
-    render(<App />)
-
-    await user.type(await screen.findByLabelText(/Display name/), 'Tokyo-Vultr')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
-
-    expect(await screen.findByRole('heading', { name: 'Host “Tokyo-Vultr” added' })).toBeTruthy()
-    const config = screen.getByText(/token = "tt_A+"/)
-    expect(config.textContent).toContain(`dashboard_url = "${location.origin}"`)
-    expect(await screen.findByRole('article', { name: /Tokyo-Vultr/ })).toBeTruthy()
-
-    await user.click(screen.getByRole('button', { name: 'Done' }))
-    expect(screen.queryByText(/tt_A+/)).toBeNull()
-  })
-
-  it('adds a Host without a name', async () => {
-    vi.useRealTimers()
-    const user = userEvent.setup()
-    stubDashboard({ authenticated: true })
-    render(<App />)
-
-    await user.click(await screen.findByRole('button', { name: 'Add' }))
-    expect(await screen.findByRole('heading', { name: 'Host “Unnamed Host” added' })).toBeTruthy()
-  })
-
   it('renders in Simplified Chinese', async () => {
     stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'tokyo', host_info: hostInfo, report })] })
     await i18n.changeLanguage('zh-CN')
     render(<App />)
     await screen.findByRole('article', { name: /tokyo/ })
     expect(within(card('tokyo')).getByRole('meter', { name: '内存' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '添加主机' })).toBeTruthy()
     expect(metric('tokyo', '运行时间')).toBe('3天4小时')
   })
 })

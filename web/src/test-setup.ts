@@ -20,4 +20,5 @@ afterEach(async () => {
   vi.unstubAllGlobals()
   await i18n.changeLanguage('en')
   localStorage.clear()
+  history.replaceState(null, '', '/')
 })

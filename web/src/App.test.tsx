@@ -48,7 +48,8 @@ describe('App', () => {
     stubDashboard()
     render(<App />)
 
-    await user.selectOptions(await screen.findByLabelText('Language'), 'zh-CN')
+    await screen.findByRole('heading', { name: 'Log in' })
+    await user.selectOptions(screen.getByLabelText('Language'), 'zh-CN')
     expect(await screen.findByRole('heading', { name: '登录' })).toBeTruthy()
     expect(document.documentElement.lang).toBe('zh-CN')
     expect(localStorage.getItem(languageStorageKey)).toBe('zh-CN')

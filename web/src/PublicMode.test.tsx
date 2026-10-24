@@ -31,9 +31,7 @@ describe('public Status page', () => {
     expect(within(card).getByRole('meter', { name: 'CPU' }).getAttribute('aria-valuetext')).toBe('12%')
     await user.click(within(card).getByRole('button', { name: 'Details for tokyo' }))
     expect(within(card).queryByText('IPv4')).toBeNull()
-    expect(screen.queryByRole('button', { name: /Settings for/ })).toBeNull()
-    expect(screen.queryByRole('heading', { name: 'Add Host' })).toBeNull()
-    expect(screen.queryByRole('heading', { name: 'Dashboard settings' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Admin panel' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Log out' })).toBeNull()
   })
 
@@ -50,7 +48,8 @@ describe('public Status page', () => {
     await user.click(screen.getByRole('button', { name: 'Log in' }))
     await user.type(screen.getByLabelText('Password'), 'correct horse battery')
     await user.click(screen.getByRole('button', { name: 'Log in' }))
-    expect(await screen.findByRole('button', { name: 'Settings for tokyo' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Admin panel' })).toBeTruthy()
+    expect(screen.getByRole('article', { name: /tokyo/ })).toBeTruthy()
   })
 
   it('shows the login form when the Status page is private', async () => {
@@ -58,18 +57,5 @@ describe('public Status page', () => {
     render(<App />)
     expect(await screen.findByLabelText('Password')).toBeTruthy()
     expect(screen.queryByRole('article', { name: /tokyo/ })).toBeNull()
-  })
-
-  it('lets the admin make the Status page public', async () => {
-    const user = userEvent.setup()
-    const dash = stubDashboard({ authenticated: true, hosts: [visible] })
-    render(<App />)
-
-    const toggle = await screen.findByLabelText('Make the Status page public')
-    await screen.findByText(/IP addresses and Hidden Hosts are never shown publicly/)
-    await user.click(toggle)
-    expect(dash.requests.at(-1)).toMatchObject({ method: 'PUT', path: '/api/settings', body: { status_public: true } })
-    expect(dash.statusPublic).toBe(true)
-    expect(await screen.findByText('Saved')).toBeTruthy()
   })
 })

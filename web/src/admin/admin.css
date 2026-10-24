@@ -1,0 +1,841 @@
+/* The admin panel, after Nezha V0's admin pages (resource/template/
+   dashboard-default and static/main.css), which use Semantic UI 2.4. The
+   values below are Semantic UI's own; everything is scoped to .nz so the
+   Status page's AngelKanade theme is untouched. */
+
+body.nz-body {
+  background: #fff;
+}
+
+.nz {
+  --nz-primary: #0338d6;
+  --nz-text: rgba(0, 0, 0, 0.87);
+  --nz-border: rgba(34, 36, 38, 0.15);
+  --nz-divider: rgba(34, 36, 38, 0.1);
+  --nz-radius: 0.28571429rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  color: var(--nz-text);
+  font-family: Lato, 'Helvetica Neue', Arial, Helvetica, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  line-height: 1.4285em;
+}
+
+.nz a {
+  color: #4183c4;
+  text-decoration: none;
+}
+
+.nz a:hover {
+  color: #1e70bf;
+}
+
+.nz .ui.container {
+  width: 95vw;
+  max-width: 1680px;
+  margin: 0 auto;
+}
+
+.nz .nb-container {
+  flex: 1;
+  padding-top: 75px;
+  padding-bottom: 65px;
+}
+
+/* Menu: "ui large top fixed menu". */
+
+.nz .ui.menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 101;
+  width: 100%;
+  min-height: 2.85714286em;
+  margin: 0;
+  background: #fff;
+  border-bottom: 1px solid var(--nz-border);
+  box-shadow: 0 1px 2px 0 var(--nz-border);
+  font-size: 1.07142857rem;
+}
+
+.nz .ui.menu > .ui.container {
+  display: flex;
+  align-items: stretch;
+}
+
+.nz .ui.menu .item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.35714286em;
+  padding: 0.92857143em 1.14285714em;
+  background: none;
+  color: var(--nz-text);
+  line-height: 1;
+  transition: background 0.1s ease;
+}
+
+.nz .ui.menu > .ui.container > .item::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 100%;
+  background: var(--nz-divider);
+  content: '';
+}
+
+.nz .ui.menu > .ui.container > .item:first-child {
+  border-left: 1px solid var(--nz-divider);
+}
+
+.nz .ui.menu a.item:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: rgba(0, 0, 0, 0.95);
+}
+
+.nz .ui.menu .active.item {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.95);
+}
+
+.nz .ui.menu .nz-brand {
+  font-weight: 700;
+}
+
+.nz .icon.logo {
+  width: 1.5em;
+  height: 1.5em;
+  color: var(--nz-primary);
+}
+
+.nz .ui.menu .right.menu {
+  display: flex;
+  margin-left: auto;
+}
+
+.nz .ui.menu .language select {
+  padding: 0.3em 0.4em;
+  border: 1px solid var(--nz-border);
+  border-radius: var(--nz-radius);
+  background: #fff;
+  box-shadow: none;
+  color: var(--nz-text);
+  font-size: 0.92857143em;
+  cursor: pointer;
+}
+
+/* "ui simple dropdown": opens on hover, or on click for touch and keyboards. */
+
+.nz .ui.dropdown {
+  position: relative;
+  cursor: pointer;
+}
+
+.nz .ui.dropdown > .text {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.nz .icon.avatar {
+  width: 2em;
+  height: 2em;
+  color: #767676;
+}
+
+.nz .icon.dropdown-icon {
+  width: 0.8em;
+  height: 0.8em;
+}
+
+.nz .ui.dropdown > .menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 11;
+  display: none;
+  min-width: 100%;
+  padding: 0;
+  background: #fff;
+  border: 1px solid var(--nz-border);
+  border-radius: 0 0 var(--nz-radius) var(--nz-radius);
+  box-shadow: 0 2px 3px 0 var(--nz-border);
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.nz .ui.dropdown:hover > .menu,
+.nz .ui.dropdown:focus-within > .menu,
+.nz .ui.dropdown.open > .menu {
+  display: block;
+}
+
+.nz .ui.dropdown > .menu > .item {
+  width: 100%;
+  padding: 0.78571429em 1.14285714em;
+  border: none;
+  border-top: 1px solid rgba(34, 36, 38, 0.05);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--nz-text);
+  font: inherit;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nz .ui.dropdown > .menu > .item:first-child {
+  border-top: none;
+}
+
+.nz .ui.dropdown > .menu > .item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* Footer: "ui inverted vertical footer segment". */
+
+.nz .ui.footer.segment {
+  margin: 0;
+  text-shadow: none;
+  padding: 1em 0;
+  background: #1b1c1d;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.nz .ui.footer a {
+  color: #fff;
+}
+
+/* Buttons. */
+
+.nz .ui.button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42857143em;
+  min-height: 1em;
+  margin: 0 0.25em 0 0;
+  padding: 0.78571429em 1.5em;
+  border: none;
+  border-radius: var(--nz-radius);
+  background: #e0e1e2;
+  box-shadow: none;
+  color: rgba(0, 0, 0, 0.6);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1em;
+  text-shadow: none;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.1s ease, opacity 0.1s ease;
+}
+
+.nz .ui.button:hover {
+  background: #cacbcd;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.nz .ui.button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.nz .ui.mini.button,
+.nz .ui.mini.buttons .button {
+  font-size: 0.78571429rem;
+}
+
+.nz .ui.primary.button {
+  background: var(--nz-primary);
+  color: #fff;
+}
+
+.nz .ui.primary.button:hover {
+  background: #022ba6;
+}
+
+.nz .ui.negative.button {
+  background: #db2828;
+  color: #fff;
+}
+
+.nz .ui.negative.button:hover {
+  background: #d01919;
+}
+
+.nz .ui.green.button {
+  background: #21ba45;
+  color: #fff;
+}
+
+.nz .ui.green.button:hover {
+  background: #16ab39;
+}
+
+.nz .ui.fluid.button {
+  display: flex;
+  width: 100%;
+}
+
+.nz .ui.large.button {
+  font-size: 1.14285714rem;
+}
+
+.nz .ui.right.labeled.button {
+  padding-right: 4.07142857em;
+  padding-left: 1.5em;
+}
+
+/* The icon is a mask over its whole box (drawn at 1em in the middle), so
+   the darker strip behind it is a pseudo-element. */
+.nz .ui.labeled.button > .icon {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 2.57142857em;
+  height: 100%;
+  background-color: currentColor;
+  mask-size: 1em;
+}
+
+.nz .ui.labeled.button::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 2.57142857em;
+  height: 100%;
+  border-radius: 0 var(--nz-radius) var(--nz-radius) 0;
+  background: rgba(0, 0, 0, 0.05);
+  content: '';
+}
+
+.nz .ui.icon-only.button {
+  padding: 0.78571429em;
+}
+
+.nz .ui.icon-only.button > .icon {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.nz .ui.buttons {
+  display: inline-flex;
+  flex-direction: row;
+  vertical-align: baseline;
+}
+
+.nz .ui.buttons .button {
+  margin: 0;
+  padding: 0.78571429em;
+  border-radius: 0;
+}
+
+.nz .ui.buttons .button:first-child {
+  border-top-left-radius: var(--nz-radius);
+  border-bottom-left-radius: var(--nz-radius);
+}
+
+.nz .ui.buttons .button:last-child {
+  border-top-right-radius: var(--nz-radius);
+  border-bottom-right-radius: var(--nz-radius);
+}
+
+.nz .ui.buttons .button > .icon {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.nz .ui.loading.button {
+  color: transparent;
+}
+
+.nz button.link {
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: #4183c4;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Hosts page. */
+
+.nz .toolbar {
+  display: flex;
+  white-space: nowrap;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5em 0;
+  margin: 1rem 0;
+}
+
+.nz .table-scroll {
+  overflow-x: auto;
+}
+
+.nz .ui.table {
+  width: 100%;
+  margin: 1em 0;
+  border: 1px solid var(--nz-border);
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: var(--nz-radius);
+  background: transparent;
+  color: var(--nz-text);
+  text-align: left;
+}
+
+.nz .ui.table th {
+  padding: 0.92857143em 0.78571429em;
+  border-bottom: 1px solid var(--nz-divider);
+  background: transparent;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.nz .ui.table td {
+  padding: 0.78571429em;
+  border-top: 1px solid var(--nz-divider);
+  vertical-align: middle;
+  word-break: break-all;
+}
+
+.nz .ui.table tbody tr:first-child td {
+  border-top: none;
+}
+
+.nz .ui.table tr.active td {
+  background: #e0e0e0;
+}
+
+.nz .ui.table td.empty {
+  padding: 2em;
+  color: rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.nz .ui.table input[type='checkbox'] {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  padding: 0;
+  box-shadow: none;
+  accent-color: var(--nz-primary);
+}
+
+.nz .name-cell,
+.nz .country-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  word-break: normal;
+}
+
+.nz .name-cell .os-logo {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+.nz .sub {
+  display: block;
+  color: rgba(0, 0, 0, 0.4);
+  font-size: 0.85em;
+}
+
+.nz .country-cell .sub {
+  display: inline;
+}
+
+.nz td.ips span {
+  display: block;
+  font-family: Monaco, Menlo, Consolas, monospace;
+  font-size: 0.92857143em;
+}
+
+/* Labels. */
+
+.nz .ui.state.label {
+  margin-left: 0;
+}
+
+.nz .ui.label {
+  display: inline-block;
+  margin: 0 0 0 0.5em;
+  padding: 0.5833em 0.833em;
+  border-radius: var(--nz-radius);
+  background: #e8e8e8;
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 0.85714286rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.nz .ui.mini.label {
+  font-size: 0.64285714rem;
+}
+
+.nz .ui.green.label {
+  background: #21ba45;
+  color: #fff;
+}
+
+.nz .ui.red.label {
+  background: #db2828;
+  color: #fff;
+}
+
+.nz .ui.grey.label {
+  background: #767676;
+  color: #fff;
+}
+
+/* Modals: "ui tiny modal" for forms, "ui mini modal" for confirmations. */
+
+body.dimmed {
+  overflow: hidden;
+}
+
+.nz .ui.dimmer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1em;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.85);
+  animation: nz-fade 0.3s ease;
+}
+
+.nz .ui.modal {
+  width: 100%;
+  margin: 3.5rem 0 1rem;
+  border-radius: var(--nz-radius);
+  background: #fff;
+  box-shadow: 1px 3px 3px 0 rgba(0, 0, 0, 0.2), 1px 3px 15px 2px rgba(0, 0, 0, 0.2);
+  text-align: left;
+  animation: nz-scale 0.3s ease;
+}
+
+.nz .ui.tiny.modal {
+  max-width: 600px;
+}
+
+.nz .ui.mini.modal {
+  max-width: 400px;
+}
+
+.nz .ui.modal > .header {
+  display: block;
+  width: auto;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--nz-border);
+  color: rgba(0, 0, 0, 0.85);
+  font-size: 1.42857143em;
+  font-weight: 700;
+  line-height: 1.28571429em;
+}
+
+.nz .ui.mini.modal > .header {
+  font-size: 1.3em;
+}
+
+.nz .ui.modal > .content {
+  padding: 1.5rem;
+  font-size: 1em;
+  line-height: 1.4;
+}
+
+.nz .ui.modal > .content > p {
+  margin: 0;
+}
+
+.nz .ui.modal > .actions {
+  padding: 1rem;
+  border-top: 1px solid var(--nz-border);
+  border-radius: 0 0 var(--nz-radius) var(--nz-radius);
+  background: #f9fafb;
+  text-align: right;
+}
+
+.nz .ui.modal > .actions .button {
+  margin-left: 0.75em;
+}
+
+@keyframes nz-fade {
+  from {
+    background: rgba(0, 0, 0, 0);
+  }
+}
+
+@keyframes nz-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+/* Forms. */
+
+.nz .ui.form {
+  position: relative;
+  max-width: 100%;
+}
+
+.nz .ui.large.form {
+  font-size: 1.14285714rem;
+}
+
+.nz .ui.form .field {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 1em;
+}
+
+.nz .ui.form .field > label:not(.checkbox) {
+  display: block;
+  margin: 0 0 0.28571429rem;
+  color: rgba(0, 0, 0, 0.87);
+  font-size: 0.92857143em;
+  font-weight: 700;
+}
+
+.nz .ui.form input:not([type='checkbox']),
+.nz .ui.form select {
+  width: 100%;
+  margin: 0;
+  padding: 0.67857143em 1em;
+  border: 1px solid var(--nz-border);
+  border-radius: var(--nz-radius);
+  outline: none;
+  background: #fff;
+  box-shadow: none;
+  color: var(--nz-text);
+  font-size: 1em;
+  line-height: 1.21428571em;
+  transition: border-color 0.1s ease;
+}
+
+.nz .ui.form input.short {
+  width: 8em;
+}
+
+.nz .ui.form input:focus,
+.nz .ui.form select:focus {
+  border-color: #85b7d9;
+}
+
+.nz .ui.form .hint {
+  margin-top: 0.3em;
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 0.85em;
+}
+
+.nz .ui.checkbox {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6em;
+  color: rgba(0, 0, 0, 0.87);
+  font-size: 1em;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.nz .ui.checkbox input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--nz-primary);
+}
+
+.nz .settings-form {
+  max-width: 720px;
+  margin-top: 1rem;
+}
+
+.nz code.one-line {
+  display: block;
+  padding: 0.6em 0.8em;
+  border-radius: var(--nz-radius);
+  background: #f3f4f5;
+  font-family: Monaco, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  word-break: break-all;
+}
+
+.nz pre {
+  margin: 0;
+  padding: 0.8em;
+  overflow-x: auto;
+  border-radius: var(--nz-radius);
+  background: #f3f4f5;
+  box-shadow: none;
+  font-size: 0.85em;
+}
+
+/* Messages. */
+
+.nz .ui.message {
+  margin: 1em 0;
+  padding: 1em 1.5em;
+  border-radius: var(--nz-radius);
+  background: #f8f8f9;
+  box-shadow: 0 0 0 1px rgba(34, 36, 38, 0.22) inset;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+.nz .ui.error.message {
+  background: #fff6f6;
+  box-shadow: 0 0 0 1px #e0b4b4 inset;
+  color: #9f3a38;
+}
+
+.nz .ui.warning.message {
+  margin-top: 0;
+  background: #fffaf3;
+  box-shadow: 0 0 0 1px #c9ba9b inset;
+  color: #573a08;
+}
+
+/* The one-time token modal. */
+
+.nz .copy-block {
+  margin-top: 1.25em;
+}
+
+.nz .copy-block h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin: 0 0 0.4em;
+  font-size: 1em;
+}
+
+.nz .copy-block p {
+  margin: 0 0 0.5em;
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 0.92857143em;
+}
+
+.nz .copy-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
+.nz .copy-field > code,
+.nz .copy-field > pre {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Toast: Nezha's top-centre suiAlert. */
+
+.nz .ui.toast {
+  position: fixed;
+  top: 1em;
+  left: 50%;
+  z-index: 1100;
+  min-width: 240px;
+  padding: 0.9em 1.4em;
+  border-radius: var(--nz-radius);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+  transform: translateX(-50%);
+  animation: nz-fade-in 0.3s ease;
+}
+
+.nz .ui.toast.success {
+  background: #21ba45;
+}
+
+.nz .ui.toast.warning {
+  background: #f2711c;
+}
+
+.nz .ui.toast.error {
+  background: #db2828;
+}
+
+@keyframes nz-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Login: Nezha's centred column, at most 450px wide. */
+
+.nz .nb-container.login {
+  display: flex;
+  align-items: center;
+}
+
+.nz .login-column {
+  max-width: 450px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.nz .ui.image.header {
+  display: inline-flex;
+  justify-content: center;
+  min-height: 0;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0 0 1rem;
+  color: var(--nz-primary);
+  font-size: 1.71428571rem;
+  font-weight: 700;
+}
+
+.nz .ui.image.header .logo {
+  width: 2.5em;
+  height: 2.5em;
+}
+
+.nz .ui.segment:not(.footer) {
+  padding: 1em 1em;
+  border: 1px solid var(--nz-border);
+  border-radius: var(--nz-radius);
+  background: #fff;
+  box-shadow: 0 1px 2px 0 var(--nz-border);
+  text-align: left;
+}
+
+.nz .ui.stacked.segment {
+  padding-bottom: 1.4em;
+}
+
+@media (max-width: 767px) {
+  .nz .ui.menu .item {
+    padding: 0.92857143em 0.8em;
+  }
+
+  .nz .toolbar .button {
+    flex: 1 1 auto;
+  }
+}
