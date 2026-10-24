@@ -4,6 +4,11 @@ name: Release
 # one version, signs SHA256SUMS with cosign (keyless: the signature is tied to
 # this workflow at this tag, and there is no private key to keep), and
 # publishes them as a GitHub release.
+#
+# Building and signing are separate jobs. The build runs npm, Go tests and
+# third-party code, so it gets no token that can sign or publish; the release
+# job runs none of that, only cosign and gh on the build's output. Actions are
+# pinned by commit, since a tag can be moved.
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+']
@@ -12,26 +17,23 @@ permissions:
   contents: read
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # create the release
-      id-token: write # cosign keyless signing
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@v4
+          cache: false # nothing cached by other workflows goes into a release
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - uses: sigstore/cosign-installer@v3
       - name: Web app
         working-directory: web
         run: |
-          npm ci
+          npm ci --ignore-scripts
           npm run typecheck
           npm test
           npm run build
@@ -45,10 +47,29 @@ jobs:
         run: go test -tags budget -v ./internal/e2e -run TestAgentBudget
       - name: Build
         run: ./scripts/build-release.sh "$GITHUB_REF_NAME"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release
+      id-token: write # cosign keyless signing
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
       - name: Sign
         working-directory: dist
         run: cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
