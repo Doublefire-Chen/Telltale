@@ -137,7 +137,12 @@ fetch() {
 			die "SHA256SUMS of $1 does not carry a valid signature from the $REPO release workflow"
 		say "checked the signature of $1's SHA256SUMS"
 	fi
-	(cd "$tmp" && grep " $asset\$" SHA256SUMS | sha256sum -c - >/dev/null 2>&1) || die "checksum mismatch for $asset"
+	# Compare the hash ourselves: given no line at all, some sha256sum -c
+	# implementations check nothing and still succeed.
+	want=$(awk -v f="$asset" '$2 == f { print $1 }' "$tmp/SHA256SUMS")
+	matches "$want" '[0-9a-f]{64}' || die "SHA256SUMS has no single checksum for $asset"
+	got=$(sha256sum "$tmp/$asset" | cut -d ' ' -f 1)
+	[ "$got" = "$want" ] || die "checksum mismatch for $asset"
 	cp "$tmp/$asset" "$3"
 	rm -rf "$tmp"
 }
