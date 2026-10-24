@@ -120,19 +120,38 @@ func newClient(rootCAs *x509.CertPool, network string) *http.Client {
 
 // Run sends Host Info and a Report immediately, then a Report every interval
 // (with Host Info whenever it is due) until ctx ends.
+//
+// Host Info is sent beside the Reports, not before them: an IP family that
+// hangs (an AAAA record with IPv6 blackholed, say) would otherwise hold each
+// Report back until it timed out, long enough for the Host to look Offline.
 func (s *Sender) Run(ctx context.Context) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 	s.checkHostInfo(ctx)
+	// infoDone is open while Host Info is being sent; the infoChannels
+	// belong to that send until it closes.
+	var infoDone chan struct{}
 	for {
-		s.sendHostInfo(ctx)
+		if infoDone == nil {
+			infoDone = make(chan struct{})
+			go func(done chan struct{}) {
+				defer close(done)
+				s.sendHostInfo(ctx)
+			}(infoDone)
+		}
 		s.sendReport(ctx)
 		select {
 		case <-ctx.Done():
+			<-infoDone
 			return
 		case <-ticker.C:
 		}
-		if s.now().Sub(s.infoCheckedAt) >= s.hostInfoCheck {
+		select {
+		case <-infoDone:
+			infoDone = nil
+		default:
+		}
+		if infoDone == nil && s.now().Sub(s.infoCheckedAt) >= s.hostInfoCheck {
 			s.checkHostInfo(ctx)
 		}
 	}

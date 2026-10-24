@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -134,10 +135,12 @@ func TestSendsReportsOverHTTP2WithBearerToken(t *testing.T) {
 	defer srv.Close()
 
 	s := newSender(srv.URL+"/", testToken, 20*time.Millisecond, "v1.2.3", &fakeCollector{}, nil, srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs)
-	reqs := runFor(t, s, d, 3)
+	reqs := runUntil(t, s, d, func(reqs []received) bool {
+		return len(onPath(reqs, v1.ReportPath)) >= 3 && len(onPath(reqs, v1.HostInfoPath)) > 0
+	})
 
-	if reqs[0].path != v1.HostInfoPath || reqs[0].hostInfo.Hostname != "fake-host" || reqs[0].hostInfo.AgentVersion != "v1.2.3" {
-		t.Fatalf("first request %s with Host Info %+v, want Host Info with the Agent version", reqs[0].path, reqs[0].hostInfo)
+	if info := onPath(reqs, v1.HostInfoPath)[0].hostInfo; info.Hostname != "fake-host" || info.AgentVersion != "v1.2.3" {
+		t.Fatalf("Host Info %+v, want Host Info with the Agent version", info)
 	}
 	for _, r := range reqs {
 		if r.method != http.MethodPost || (r.path != v1.ReportPath && r.path != v1.HostInfoPath) {
@@ -191,11 +194,10 @@ func TestIgnoresEverythingButTheStatusCode(t *testing.T) {
 			io.WriteString(w, strings.Repeat("x", 1<<20))
 		},
 	}
-	var i int
+	var i atomic.Int64 // Host Info and Reports arrive concurrently
 	d := &fakeDashboard{}
 	d.respond = func(w http.ResponseWriter, _ *http.Request) {
-		responses[i%len(responses)](w)
-		i++
+		responses[(i.Add(1)-1)%int64(len(responses))](w)
 	}
 	srv := httptest.NewServer(d)
 	defer srv.Close()
@@ -308,6 +310,30 @@ func TestHostInfoRetriedUntilAccepted(t *testing.T) {
 	// Three refusals, then one accepted send, then nothing more (unchanged).
 	if n := len(onPath(reqs, v1.HostInfoPath)); n != 4 {
 		t.Fatalf("Host Info sent %d times, want 4 (3 refused + 1 accepted)", n)
+	}
+}
+
+// TestHostInfoDoesNotHoldBackReports answers no Host Info, as when the
+// Dashboard's AAAA record points into an IPv6 blackhole: Reports must keep
+// their interval while Host Info waits for its timeout.
+func TestHostInfoDoesNotHoldBackReports(t *testing.T) {
+	release := make(chan struct{})
+	d := &fakeDashboard{}
+	d.respond = func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == v1.HostInfoPath {
+			<-release
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+	srv := httptest.NewServer(d)
+	defer srv.Close()
+	defer close(release) // before srv.Close, which waits for the hung requests
+	s := newSender(srv.URL, testToken, 10*time.Millisecond, "dev", &fakeCollector{}, nil, nil)
+
+	start := time.Now()
+	runFor(t, s, d, 10)
+	if took := time.Since(start); took > 2*time.Second {
+		t.Fatalf("10 Reports took %v while Host Info hung", took)
 	}
 }
 
