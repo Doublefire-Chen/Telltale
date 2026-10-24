@@ -148,6 +148,57 @@ describe('Status page', () => {
     expect(metric('tokyo', 'Agent')).toBe('v1.1.0')
   })
 
+  it('opens the details panel leftwards or upwards when it would leave the window', async () => {
+    vi.useRealTimers()
+    const user = userEvent.setup()
+    stubDashboard({ authenticated: true, hosts: [host({ id: 'h1', name: 'tokyo', host_info: hostInfo })] })
+    // jsdom has no layout, so fake where things are: the popover, opened down
+    // and to the right, would end at (right, bottom); the icon is at iconTop.
+    let right = 0
+    let bottom = 0
+    let iconTop = 0
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const r = this.classList.contains('host-popover')
+        ? { top: bottom - 300, bottom, left: right - 280, right, width: 280, height: 300 }
+        : { top: iconTop, bottom: iconTop + 20, left: 0, right: 20, width: 20, height: 20 }
+      return { ...r, x: r.left, y: r.top, toJSON: () => r } as DOMRect
+    })
+    render(<App />)
+    const details = await screen.findByRole('button', { name: 'Details for tokyo' })
+    const popover = () => screen.getByRole('group', { name: 'Details for tokyo' })
+    // Unpin and move the pointer away, so the next click opens it afresh.
+    const close = async () => {
+      await user.click(details)
+      await user.unhover(details)
+      expect(screen.queryByRole('group', { name: 'Details for tokyo' })).toBeNull()
+    }
+
+    right = innerWidth - 100
+    bottom = 400
+    iconTop = 80
+    await user.click(details)
+    expect(popover().className).toBe('host-popover')
+    await close()
+
+    right = innerWidth + 150
+    await user.click(details)
+    expect(popover().className).toBe('host-popover open-left')
+    await close()
+
+    right = innerWidth - 100
+    bottom = innerHeight + 50
+    iconTop = innerHeight - 200
+    await user.click(details)
+    expect(popover().className).toBe('host-popover open-up')
+    await close()
+
+    // No room above either: it stays below, and the page scrolls as usual.
+    iconTop = 100
+    await user.click(details)
+    expect(popover().className).toBe('host-popover')
+    rect.mockRestore()
+  })
+
   it('shows Swap as off when the Host has none, and greys bars while Offline', async () => {
     stubDashboard({
       authenticated: true,

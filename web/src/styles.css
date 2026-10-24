@@ -560,6 +560,34 @@ button.card-icon.settings {
   height: 8px;
 }
 
+/* Near the window's right edge the popover opens to the left of its icon,
+   and near the bottom it opens upwards; the pointer and the hover bridge
+   move with it. */
+.host-popover.open-left {
+  right: -6px;
+  left: auto;
+}
+
+.host-popover.open-left::after {
+  right: 14px;
+  left: auto;
+}
+
+.host-popover.open-up {
+  top: auto;
+  bottom: calc(100% + 3px);
+}
+
+.host-popover.open-up::after {
+  top: auto;
+  bottom: -4.3px;
+}
+
+.host-popover.open-up::before {
+  top: auto;
+  bottom: -8px;
+}
+
 .host-details {
   margin: 0;
 }

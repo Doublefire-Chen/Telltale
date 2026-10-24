@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Host, HostInfo } from './api'
 import { Flags } from './Flag'
@@ -92,6 +92,7 @@ function HostCard({ host: h, dashboardVersion, now, admin }: HostCardProps) {
   const [pinned, setPinned] = useState(false)
   const [hovered, setHovered] = useState(false)
   const detailsOpen = pinned || hovered
+  const placement = usePopoverPlacement(detailsOpen)
   const r = h.report
   const info = h.host_info
   const name = displayName(h, t('status.unnamed'))
@@ -133,7 +134,13 @@ function HostCard({ host: h, dashboardVersion, now, admin }: HostCardProps) {
               <Icon name="info-circle-fill" />
             </button>
           {detailsOpen && (
-            <div id={detailsId} className="host-popover" role="group" aria-label={t('status.details', { name })}>
+            <div
+              id={detailsId}
+              ref={placement.ref}
+              className={`host-popover${placement.left ? ' open-left' : ''}${placement.up ? ' open-up' : ''}`}
+              role="group"
+              aria-label={t('status.details', { name })}
+            >
               <dl className="host-details">
                 {admin && (
                   <>
@@ -250,6 +257,40 @@ function HostCard({ host: h, dashboardVersion, now, admin }: HostCardProps) {
 }
 
 /** ratio is used as a percentage of total, or undefined while either is unknown. */
+/** Space kept between the popover and the window's edge. */
+const viewportMargin = 8
+
+/**
+ * usePopoverPlacement decides which way an opening popover goes. It opens
+ * down and to the right of its icon; if that would run past the window's
+ * right edge it opens to the left instead, and if it would run past the
+ * bottom while there is room above, it opens upwards. It measures before the
+ * browser paints, so the popover never visibly jumps.
+ */
+function usePopoverPlacement(open: boolean) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [placement, setPlacement] = useState({ left: false, up: false })
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlacement({ left: false, up: false })
+      return
+    }
+    const el = ref.current
+    const anchor = el?.parentElement
+    if (!el || !anchor) return
+    const box = el.getBoundingClientRect()
+    const icon = anchor.getBoundingClientRect()
+    const width = document.documentElement.clientWidth || innerWidth
+    const height = document.documentElement.clientHeight || innerHeight
+    const left = box.right > width - viewportMargin
+    const up = box.bottom > height - viewportMargin && icon.top - box.height - viewportMargin > 0
+    if (left || up) setPlacement({ left, up })
+  }, [open])
+
+  return { ref, ...placement }
+}
+
 function ratio(used: number | undefined, total: number | undefined): number | undefined {
   if (used === undefined || !total) return undefined
   return (used / total) * 100
