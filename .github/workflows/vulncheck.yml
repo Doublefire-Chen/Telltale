@@ -1,0 +1,25 @@
+name: Vulnerability check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Weekly too, so a newly published Go or dependency vulnerability shows up
+  # even when nothing is pushed.
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # Fails only for vulnerabilities in code the binaries can actually reach.
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...

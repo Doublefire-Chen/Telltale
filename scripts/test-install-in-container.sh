@@ -66,7 +66,7 @@ TOKEN=$(run_in 'curl -fs -c /tmp/jar -o /dev/null -X POST -H "Content-Type: appl
 
 echo "installing the Agent"
 run_in 'touch /tmp/marker && sleep 1'
-run_in "sh /tmp/install.sh install --dashboard-url http://127.0.0.1:8080 --token $TOKEN --binary /tmp/telltale-agent --interval 1s"
+run_in "printf %s $TOKEN | sh /tmp/install.sh install --dashboard-url http://127.0.0.1:8080 --token-file - --binary /tmp/telltale-agent --interval 1s"
 CHANGED=$(run_in 'find / -xdev \( -path /proc -o -path /sys -o -path /tmp -o -path /var/tmp -o -path /run -o -path /var/lib/telltale -o -path /var/log -o -path /var/lib/systemd -o -path /var/cache \) -prune -o -newer /tmp/marker -print' | sort)
 EXPECTED=$(printf '%s\n' /etc /etc/.pwd.lock /etc/group /etc/group- /etc/gshadow /etc/gshadow- /etc/passwd /etc/passwd- /etc/shadow /etc/shadow- \
 	/etc/systemd/system /etc/systemd/system/multi-user.target.wants /etc/systemd/system/multi-user.target.wants/telltale-agent.service \
@@ -75,9 +75,9 @@ UNEXPECTED=$(printf '%s\n' "$CHANGED" | grep -vxF "$EXPECTED" || true)
 [ -z "$UNEXPECTED" ] || fail "install touched paths outside its own: $UNEXPECTED"
 ok "install wrote only its own paths (plus the user database)"
 
-run_in 'test "$(stat -c %U:%a /etc/telltale/agent.toml)" = telltale-agent:600' || fail "config is not 0600 telltale-agent"
+run_in 'test "$(stat -c %U:%G:%a /etc/telltale/agent.toml)" = root:telltale-agent:640' || fail "config is not root:telltale-agent 0640"
 run_in 'getent passwd telltale-agent | grep -q ":/usr/sbin/nologin$"' || fail "telltale-agent has a login shell"
-ok "config is 0600 and the user has no shell"
+ok "config is root-owned 0640 and the user has no shell"
 
 sleep 4
 run_in 'test "$(ps -o user= -C telltale-agent)" = telltale-agent' || { run_in 'journalctl -u telltale-agent --no-pager | tail -20'; fail "Agent is not running as telltale-agent"; }

@@ -95,6 +95,9 @@ func (c Config) validate() error {
 	if u.RawQuery != "" || u.Fragment != "" {
 		return errors.New("dashboard_url must not have a query or fragment")
 	}
+	if u.User != nil {
+		return errors.New("dashboard_url must not contain a user name or password; the Host token is the only credential")
+	}
 	if !strings.HasPrefix(c.Token, "tt_") || len(c.Token) <= len("tt_") {
 		return errors.New(`token must be the Host token from the Dashboard (it starts with "tt_")`)
 	}

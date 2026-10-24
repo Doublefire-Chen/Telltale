@@ -64,8 +64,10 @@ cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
 sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
 ```
 
-`install.sh --version` always checks the binary against `SHA256SUMS`; run the
-`cosign` step yourself if you also want to check who published it.
+`install.sh --version` does both checks itself when `cosign` is installed.
+Without it, the installer refuses to download unless you pass `--sha256` with
+the binary's checksum from a `SHA256SUMS` you verified as above on another
+machine.
 
 ### 1. The Dashboard (Linux)
 
@@ -101,14 +103,15 @@ later, which immediately revokes the old one.
 and says exactly which files it touches.
 
 ```sh
-sudo sh install.sh install --dashboard-url https://status.example.com --token tt_… --version vX.Y.Z
-# or, with a binary you already have: --binary ./telltale-agent
+sudo sh install.sh install --dashboard-url https://status.example.com --version vX.Y.Z
+# it asks for the Host token; or pass --token-file FILE (- for stdin)
+# without cosign: add --sha256 HASH; with a binary you already have: --binary ./telltale-agent
 ```
 
-It creates an unprivileged `telltale-agent` user, writes the config readable
-only by that user, and starts a hardened systemd unit. To upgrade, run it
-again with just `--version` or `--binary`. To remove everything:
-`sudo sh install.sh uninstall`.
+It creates an unprivileged `telltale-agent` user, writes a root-owned config
+only that user's group can read, and starts a hardened systemd unit. It never
+runs the new binary itself. To upgrade, run it again with just `--version` or
+`--binary`. To remove everything: `sudo sh install.sh uninstall`.
 
 **Windows** (as Administrator) — put `telltale-agent.exe` in
 `C:\Program Files\Telltale\`, save the config as
@@ -118,7 +121,8 @@ again with just `--version` or `--binary`. To remove everything:
 & "C:\Program Files\Telltale\telltale-agent.exe" service install
 ```
 
-It runs as LocalService; its logs are in the Event Viewer.
+It runs as LocalService; its logs are in the Event Viewer. It refuses to
+install an exe outside Program Files, where other users might replace it.
 
 **macOS** — put `telltale-agent` in `/usr/local/bin/`, save the config as
 `/etc/telltale/agent.toml`, then:

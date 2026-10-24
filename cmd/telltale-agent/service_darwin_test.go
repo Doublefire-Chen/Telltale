@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -48,11 +49,33 @@ func TestEnsureUserCreatesAHiddenShelllessAccount(t *testing.T) {
 		"dscl . -create /Users/_telltale-agent UserShell /usr/bin/false",
 		"dscl . -create /Users/_telltale-agent NFSHomeDirectory /var/empty",
 		"dscl . -create /Users/_telltale-agent IsHidden 1",
+		"dscl . -create /Users/_telltale-agent Password *",
 		"dscl . -create /Groups/_telltale-agent PrimaryGroupID 302",
 	} {
 		if !strings.Contains(all, want) {
 			t.Errorf("missing %q in:\n%s", want, all)
 		}
+	}
+}
+
+func TestEnsureUserLocksAnExistingAccount(t *testing.T) {
+	var calls []string
+	orig := command
+	t.Cleanup(func() { command = orig })
+	command = func(name string, args ...string) (string, error) {
+		call := name + " " + strings.Join(args, " ")
+		calls = append(calls, call)
+		if call == "dscl . -read /Users/_telltale-agent UniqueID PrimaryGroupID" {
+			return "PrimaryGroupID: 302\nUniqueID: 302\n", nil
+		}
+		return "", nil
+	}
+	uid, gid, created, err := ensureUser()
+	if err != nil || created || uid != 302 || gid != 302 {
+		t.Fatalf("ensureUser = %d, %d, %v, %v", uid, gid, created, err)
+	}
+	if !slices.Contains(calls, "dscl . -create /Users/_telltale-agent Password *") {
+		t.Errorf("existing user not given the password *: %q", calls)
 	}
 }
 

@@ -53,15 +53,17 @@ func installService(configPath string) error {
 		return err
 	}
 	if created {
-		fmt.Printf("created user %s (no shell, no home)\n", agentUser)
+		fmt.Printf("created user %s (no shell, no home, no password)\n", agentUser)
 	}
-	if err := os.Chown(configPath, uid, gid); err != nil {
+	// Root owns the config so the Agent can read its token but not change
+	// where it reports to.
+	if err := os.Chown(configPath, 0, gid); err != nil {
 		return err
 	}
-	if err := os.Chmod(configPath, 0o600); err != nil {
+	if err := os.Chmod(configPath, 0o640); err != nil {
 		return err
 	}
-	fmt.Printf("made %s readable only by %s\n", configPath, agentUser)
+	fmt.Printf("made %s readable only by root and the %s group\n", configPath, agentUser)
 
 	log, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640)
 	if err != nil {
@@ -123,10 +125,16 @@ func executable() (string, error) {
 }
 
 // ensureUser returns the IDs of the daemon user, creating it (and its group)
-// if needed: hidden, shell /usr/bin/false, home /var/empty.
+// if needed: hidden, shell /usr/bin/false, home /var/empty, and the password
+// "*", which matches no password, so nobody can log in as it.
 func ensureUser() (uid, gid int, created bool, err error) {
 	if out, err := command("dscl", ".", "-read", "/Users/"+agentUser, "UniqueID", "PrimaryGroupID"); err == nil {
 		uid, gid, err := parseIDs(out)
+		if err != nil {
+			return 0, 0, false, err
+		}
+		// Users made by v0.1.0 had no password set.
+		_, err = command("dscl", ".", "-create", "/Users/"+agentUser, "Password", "*")
 		return uid, gid, false, err
 	}
 	id, err := freeID()
@@ -143,6 +151,7 @@ func ensureUser() (uid, gid int, created bool, err error) {
 		{"-create", "/Users/" + agentUser, "PrimaryGroupID", sid},
 		{"-create", "/Users/" + agentUser, "UserShell", "/usr/bin/false"},
 		{"-create", "/Users/" + agentUser, "NFSHomeDirectory", "/var/empty"},
+		{"-create", "/Users/" + agentUser, "Password", "*"},
 		{"-create", "/Users/" + agentUser, "RealName", "Telltale Agent"},
 		{"-create", "/Users/" + agentUser, "IsHidden", "1"},
 	}

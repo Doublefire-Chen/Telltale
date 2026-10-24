@@ -58,8 +58,9 @@ cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
 sha256sum --ignore-missing -c SHA256SUMS   # macOS：shasum -a 256 --ignore-missing -c SHA256SUMS
 ```
 
-`install.sh --version` 总会用 `SHA256SUMS` 校验二进制文件；如果还想确认发布者，
-请自己运行上面的 `cosign` 命令。
+装有 `cosign` 时，`install.sh --version` 会自己完成上面两项校验。没有 `cosign` 时，
+安装程序会拒绝下载，除非你用 `--sha256` 给出二进制文件的校验和——取自你在另一台机器上
+按上面方法验证过的 `SHA256SUMS`。
 
 ### 1. Dashboard（Linux）
 
@@ -93,13 +94,14 @@ Dashboard 监听 `127.0.0.1:8080` 和 `[::1]:8080`。请在前面放一个反向
 并写明了会动哪些文件。
 
 ```sh
-sudo sh install.sh install --dashboard-url https://status.example.com --token tt_… --version vX.Y.Z
-# 或者使用你手上已有的二进制文件：--binary ./telltale-agent
+sudo sh install.sh install --dashboard-url https://status.example.com --version vX.Y.Z
+# 它会询问 Host 令牌；也可以用 --token-file FILE（- 表示标准输入）
+# 没有 cosign 时加 --sha256 HASH；使用你手上已有的二进制文件：--binary ./telltale-agent
 ```
 
-它会创建无特权的 `telltale-agent` 用户，写入只有该用户能读取的配置文件，
-并启动一个加固过的 systemd 服务。升级时只带 `--version` 或 `--binary` 再运行一次即可。
-完全卸载：`sudo sh install.sh uninstall`。
+它会创建无特权的 `telltale-agent` 用户，写入归 root 所有、只有该用户所在组能读取的配置文件，
+并启动一个加固过的 systemd 服务。它自己从不运行新的二进制文件。升级时只带 `--version`
+或 `--binary` 再运行一次即可。完全卸载：`sudo sh install.sh uninstall`。
 
 **Windows**（以管理员身份）—— 把 `telltale-agent.exe` 放到 `C:\Program Files\Telltale\`，
 把配置保存为 `C:\ProgramData\Telltale\agent.toml`，然后：
@@ -108,7 +110,8 @@ sudo sh install.sh install --dashboard-url https://status.example.com --token tt
 & "C:\Program Files\Telltale\telltale-agent.exe" service install
 ```
 
-它以 LocalService 身份运行，日志在事件查看器中。
+它以 LocalService 身份运行，日志在事件查看器中。如果 exe 不在 Program Files 下
+（其他用户可能替换它），它会拒绝安装。
 
 **macOS** —— 把 `telltale-agent` 放到 `/usr/local/bin/`，把配置保存为
 `/etc/telltale/agent.toml`，然后：

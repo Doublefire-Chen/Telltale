@@ -21,10 +21,17 @@ import (
 
 const serviceName = "telltale-agent"
 
-// configSDDL lets only SYSTEM and Administrators (full control) and the
-// LocalService account the Agent runs as (read) open the config file, since
-// it holds the Host token. P: inherited permissions are not applied.
-const configSDDL = "D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;LS)"
+// configSDDL makes Administrators the owner of the config file and lets only
+// SYSTEM and Administrators (full control) and the LocalService account the
+// Agent runs as (read) open it, since it holds the Host token. P: inherited
+// permissions are not applied. Without the owner change, a non-admin who
+// created the file could still rewrite its permissions.
+const configSDDL = "O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;LS)"
+
+// configDirSDDL does the same for the config's folder, so no one else can
+// delete the config and put their own in its place. OICI: files and folders
+// inside inherit it.
+const configDirSDDL = "O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FR;;;LS)"
 
 func installService(configPath string) error {
 	exe, err := os.Executable()
@@ -34,13 +41,25 @@ func installService(configPath string) error {
 	if exe, err = filepath.Abs(exe); err != nil {
 		return err
 	}
-	if strings.HasPrefix(strings.ToLower(exe), `c:\users\`) {
-		return fmt.Errorf(`%s is inside a user profile, which LocalService cannot read; move it to C:\Program Files\Telltale first`, exe)
+	// Only Administrators can change files under Program Files. Anywhere
+	// else, whoever can replace the exe gets to run code as the service.
+	if !insideProgramFiles(exe) {
+		return fmt.Errorf(`%s is outside Program Files, where other users may be able to replace it; move it to C:\Program Files\Telltale first`, exe)
 	}
-	if err := restrictConfig(configPath); err != nil {
+	// The folder only if it is Telltale's own: a config kept elsewhere may
+	// share its folder with files that need other permissions.
+	if dir := filepath.Dir(configPath); strings.EqualFold(dir, filepath.Dir(agent.DefaultConfigPath())) {
+		if err := restrict(dir, configDirSDDL); err != nil {
+			return fmt.Errorf("restrict %s: %w", dir, err)
+		}
+		fmt.Printf("made %s owned by Administrators and writable only by them (and SYSTEM)\n", dir)
+	} else {
+		fmt.Printf("note: make sure only Administrators can change %s, or move the config to %s\n", dir, agent.DefaultConfigPath())
+	}
+	if err := restrict(configPath, configSDDL); err != nil {
 		return fmt.Errorf("restrict %s: %w", configPath, err)
 	}
-	fmt.Printf("made %s readable only by LocalService (and SYSTEM, Administrators)\n", configPath)
+	fmt.Printf("made %s owned by Administrators and readable only by LocalService (and SYSTEM, Administrators)\n", configPath)
 
 	m, err := mgr.Connect()
 	if err != nil {
@@ -115,8 +134,28 @@ func uninstallService(configPath string, purge bool) error {
 	return nil
 }
 
-func restrictConfig(path string) error {
-	sd, err := windows.SecurityDescriptorFromString(configSDDL)
+// insideProgramFiles reports whether exe is under Program Files (either one,
+// on 64-bit Windows).
+func insideProgramFiles(exe string) bool {
+	for _, env := range []string{"ProgramFiles", "ProgramFiles(x86)"} {
+		dir := os.Getenv(env)
+		if dir == "" {
+			continue
+		}
+		if rel, err := filepath.Rel(dir, exe); err == nil && !strings.HasPrefix(rel, "..") && rel != "." {
+			return true
+		}
+	}
+	return false
+}
+
+// restrict sets the owner and permissions of path from sddl.
+func restrict(path, sddl string) error {
+	sd, err := windows.SecurityDescriptorFromString(sddl)
+	if err != nil {
+		return err
+	}
+	owner, _, err := sd.Owner()
 	if err != nil {
 		return err
 	}
@@ -125,7 +164,8 @@ func restrictConfig(path string) error {
 		return err
 	}
 	return windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT,
-		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil)
+		windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION,
+		owner, nil, dacl, nil)
 }
 
 // runAsService runs the Agent under the Service Control Manager when it was

@@ -1,15 +1,21 @@
 #!/bin/sh
 # Telltale Agent installer for Linux.
 #
-#   install.sh install   --dashboard-url URL --token TOKEN (--binary PATH | --version vX.Y.Z) [--interval 2s]
-#   install.sh install   (--binary PATH | --version vX.Y.Z)      # upgrade: keeps the existing config
+#   install.sh install   --dashboard-url URL (--binary PATH | --version vX.Y.Z [--sha256 HASH]) [--interval 2s] [--token-file FILE]
+#   install.sh install   (--binary PATH | --version vX.Y.Z [--sha256 HASH])   # upgrade: keeps the existing config
 #   install.sh uninstall
+#
+# On a first install it asks for the Host token (or reads it from --token-file,
+# "-" for stdin), so the token never appears in the process list or your shell
+# history. --version checks the download's cosign signature, which needs
+# cosign; without cosign, pass --sha256 with the binary's checksum from a
+# SHA256SUMS you verified elsewhere.
 #
 # Read it before you run it. It touches only these paths, and uninstall removes
 # all of them:
 #
 #   /usr/local/bin/telltale-agent                   the Agent
-#   /etc/telltale/agent.toml                        its config (mode 0600)
+#   /etc/telltale/agent.toml                        its config (root-owned, readable by the Agent's group)
 #   /etc/telltale/                                  removed on uninstall if empty
 #   /etc/systemd/system/telltale-agent.service      its systemd unit
 #   the telltale-agent system user and group        no shell, no home
@@ -29,7 +35,7 @@ say() { printf '%s\n' "$*"; }
 die() { printf 'telltale install: %s\n' "$*" >&2; exit 1; }
 
 usage() {
-	sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
 	exit 2
 }
 
@@ -73,6 +79,7 @@ RestrictNamespaces=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
+RemoveIPC=yes
 MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
@@ -96,18 +103,59 @@ arch() {
 	esac
 }
 
-# fetch VERSION DEST downloads a release binary and checks it against the
-# release's SHA256SUMS.
-fetch() {
+# matches VALUE REGEX succeeds if all of VALUE matches the extended REGEX.
+matches() { printf '%s' "$1" | grep -Eqx "$2" && [ "$(printf '%s' "$1" | wc -l)" -eq 0 ]; }
+
+# can_fetch VERSION SHA256 fails early if fetch could not check the download.
+can_fetch() {
 	command -v curl >/dev/null 2>&1 || die "curl is needed to download a release; or use --binary"
+	if [ -z "$2" ] && ! command -v cosign >/dev/null 2>&1; then
+		die "cosign is needed to check who published $1 (https://docs.sigstore.dev/cosign/system_config/installation/);
+or pass --sha256 with the checksum of telltale-agent-linux-$(arch) from a SHA256SUMS you verified with cosign elsewhere"
+	fi
+}
+
+# fetch VERSION SHA256 DEST downloads a release binary and checks it: against
+# SHA256 if given, otherwise against the release's SHA256SUMS after checking
+# that file's cosign signature, which proves this repository's release
+# workflow made it at that tag. A SHA256SUMS that is only checksummed would
+# prove nothing, since whoever could replace the binary could replace it too.
+fetch() {
 	asset="telltale-agent-linux-$(arch)"
 	base="https://github.com/$REPO/releases/download/$1"
 	tmp=$(mktemp -d)
 	curl -fsSL "$base/$asset" -o "$tmp/$asset" || die "could not download $base/$asset"
-	curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" || die "could not download $base/SHA256SUMS"
-	(cd "$tmp" && grep " $asset\$" SHA256SUMS | sha256sum -c - >/dev/null) || die "checksum mismatch for $asset"
-	cp "$tmp/$asset" "$2"
+	if [ -n "$2" ]; then
+		printf '%s  %s\n' "$2" "$asset" > "$tmp/SHA256SUMS"
+	else
+		curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" || die "could not download $base/SHA256SUMS"
+		curl -fsSL "$base/SHA256SUMS.sigstore.json" -o "$tmp/SHA256SUMS.sigstore.json" ||
+			die "could not download $base/SHA256SUMS.sigstore.json"
+		cosign verify-blob "$tmp/SHA256SUMS" --bundle "$tmp/SHA256SUMS.sigstore.json" \
+			--certificate-oidc-issuer https://token.actions.githubusercontent.com \
+			--certificate-identity "https://github.com/$REPO/.github/workflows/release.yml@refs/tags/$1" >/dev/null 2>&1 ||
+			die "SHA256SUMS of $1 does not carry a valid signature from the $REPO release workflow"
+		say "checked the signature of $1's SHA256SUMS"
+	fi
+	(cd "$tmp" && grep " $asset\$" SHA256SUMS | sha256sum -c - >/dev/null 2>&1) || die "checksum mismatch for $asset"
+	cp "$tmp/$asset" "$3"
 	rm -rf "$tmp"
+}
+
+# read_token FILE prints the Host token from FILE ("-" for stdin), or asks for
+# it on the terminal without echoing it.
+read_token() {
+	if [ -n "$1" ]; then
+		if [ "$1" = - ]; then head -n 1; else head -n 1 "$1"; fi | tr -d '\r'
+		return
+	fi
+	[ -r /dev/tty ] || die "no terminal to ask for the Host token on; use --token-file FILE (or - for stdin)"
+	printf 'Host token (input hidden): ' > /dev/tty
+	stty -echo < /dev/tty
+	IFS= read -r t < /dev/tty || t=""
+	stty echo < /dev/tty
+	printf '\n' > /dev/tty
+	printf '%s' "$t"
 }
 
 create_user() {
@@ -127,19 +175,35 @@ create_user() {
 }
 
 install_agent() {
-	url="" token="" binary="" version="" interval=""
+	url="" token="" token_file="" binary="" version="" sha256="" interval=""
 	while [ $# -gt 0 ]; do
 		case "$1" in
 			--dashboard-url) url="${2:?}"; shift 2 ;;
-			--token) token="${2:?}"; shift 2 ;;
+			--token) token="${2:?}"; shift 2 ;; # still accepted, but visible in ps
+			--token-file) token_file="${2:?}"; shift 2 ;;
 			--binary) binary="${2:?}"; shift 2 ;;
 			--version) version="${2:?}"; shift 2 ;;
+			--sha256) sha256="${2:?}"; shift 2 ;;
 			--interval) interval="${2:?}"; shift 2 ;;
 			*) usage ;;
 		esac
 	done
 	[ -n "$binary" ] || [ -n "$version" ] || die "give --binary PATH or --version vX.Y.Z"
-	[ -f "$CONFIG" ] || { [ -n "$url" ] && [ -n "$token" ]; } || die "first install needs --dashboard-url and --token"
+	[ -z "$version" ] || matches "$version" 'v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' || die "--version must look like v1.2.3"
+	[ -z "$sha256" ] || matches "$sha256" '[0-9a-f]{64}' || die "--sha256 must be 64 lowercase hex digits"
+	[ -z "$interval" ] || matches "$interval" '[0-9]+(\.[0-9]+)?(ms|s|m|h)' || die "--interval must be a duration such as 2s"
+	if [ -n "$url" ]; then
+		# Quotes, backslashes and whitespace would break out of the TOML
+		# string; the Agent itself checks the rest of the URL when it starts.
+		matches "$url" 'https?://[^[:space:]"\\@/?#]+(/[^[:space:]"\\?#]*)?' ||
+			die "--dashboard-url must be a plain http(s) URL such as https://status.example.com"
+		[ -n "$token" ] || token=$(read_token "$token_file")
+		matches "$token" 'tt_[A-Za-z0-9_-]+' || die 'the Host token must be the one the Dashboard showed (it starts with "tt_")'
+	elif [ -n "$token" ] || [ -n "$token_file" ] || [ -n "$interval" ]; then
+		die "a token or interval needs --dashboard-url too"
+	fi
+	[ -f "$CONFIG" ] || [ -n "$url" ] || die "first install needs --dashboard-url"
+	[ -n "$binary" ] || can_fetch "$version" "$sha256"
 
 	create_user
 
@@ -147,15 +211,17 @@ install_agent() {
 	if [ -n "$binary" ]; then
 		cp "$binary" "$tmp_bin"
 	else
-		fetch "$version" "$tmp_bin"
+		fetch "$version" "$sha256" "$tmp_bin"
 	fi
 	install -m 0755 "$tmp_bin" "$BIN"
 	rm -f "$tmp_bin"
-	say "installed $BIN ($("$BIN" -version))"
+	# Not running the new binary here: it would run as root, unconfined.
+	say "installed $BIN (${version:-from $binary}, sha256 $(sha256sum "$BIN" | cut -d ' ' -f 1))"
 
-	if [ -n "$url" ] && [ -n "$token" ]; then
-		mkdir -p "$CONFIG_DIR"
-		chmod 0755 "$CONFIG_DIR"
+	mkdir -p "$CONFIG_DIR"
+	chown root:root "$CONFIG_DIR"
+	chmod 0755 "$CONFIG_DIR"
+	if [ -n "$url" ]; then
 		old_umask=$(umask)
 		umask 077
 		{
@@ -164,12 +230,15 @@ install_agent() {
 			[ -z "$interval" ] || printf 'interval = "%s"\n' "$interval"
 		} > "$CONFIG"
 		umask "$old_umask"
-		chown "$USER_NAME:$USER_NAME" "$CONFIG"
-		chmod 0600 "$CONFIG"
-		say "wrote $CONFIG (readable only by $USER_NAME)"
+		say "wrote $CONFIG"
 	else
 		say "kept existing $CONFIG"
 	fi
+	# Root owns the config so the Agent can read its token but not change
+	# where it reports to.
+	chown "root:$USER_NAME" "$CONFIG"
+	chmod 0640 "$CONFIG"
+	say "made $CONFIG readable only by root and the $USER_NAME group"
 
 	write_unit
 	say "wrote $UNIT"

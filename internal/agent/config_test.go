@@ -34,6 +34,7 @@ func TestConfigRejectsInvalidSettings(t *testing.T) {
 		"plain http":      {"dashboard_url = \"http://status.example.com\"\n" + ok, "https"},
 		"not a URL":       {"dashboard_url = \"status.example.com\"\n" + ok, "absolute URL"},
 		"query string":    {"dashboard_url = \"https://status.example.com/?token=x\"\n" + ok, "query"},
+		"user info":       {"dashboard_url = \"https://admin:pw@status.example.com\"\n" + ok, "user name or password"},
 		"missing token":   {"dashboard_url = \"https://status.example.com\"\n", "tt_"},
 		"wrong token":     {"dashboard_url = \"https://status.example.com\"\ntoken = \"abc\"\n", "tt_"},
 		"unknown setting": {"dashboard_url = \"https://status.example.com\"\n" + ok + "intervall = \"2s\"\n", "unknown setting"},
