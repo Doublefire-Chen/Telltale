@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -103,6 +105,34 @@ func TestLaunchdPlist(t *testing.T) {
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("plist lacks %q:\n%s", want, s)
+		}
+	}
+}
+
+func TestChangeableOnlyBy(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "telltale-agent")
+	if err := os.WriteFile(exe, nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The temporary folder is ours, and the folders above it root's.
+	us := map[uint32]bool{0: true, uint32(os.Getuid()): true}
+	if err := changeableOnlyBy(exe, us); err != nil {
+		t.Fatalf("own file in own folder: %v", err)
+	}
+	if err := changeableOnlyBy(exe, map[uint32]bool{0: true}); err == nil || !strings.Contains(err.Error(), "not root") {
+		t.Fatalf("file owned by another user: %v", err)
+	}
+	os.Chmod(dir, 0o777)
+	defer os.Chmod(dir, 0o700)
+	if err := changeableOnlyBy(exe, us); err == nil || !strings.Contains(err.Error(), dir+" is writable by everyone") {
+		t.Fatalf("world-writable folder: %v", err)
+	}
+	os.Chmod(dir, 0o700)
+	if os.Getgid() != 0 && os.Getgid() != 80 {
+		os.Chmod(exe, 0o775)
+		if err := changeableOnlyBy(exe, us); err == nil || !strings.Contains(err.Error(), "writable by group") {
+			t.Fatalf("group-writable file: %v", err)
 		}
 	}
 }

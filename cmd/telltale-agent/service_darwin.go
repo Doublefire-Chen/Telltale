@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/Doublefire-Chen/Telltale/internal/agent"
 )
@@ -47,6 +48,19 @@ func installService(configPath string) error {
 	}
 	if strings.HasPrefix(exe, "/Users/") {
 		return fmt.Errorf("%s is inside a home folder, which %s cannot read; move it to /usr/local/bin first", exe, agentUser)
+	}
+	// Whoever can replace the Agent runs code as its user, and whoever can
+	// swap the config redirects its Reports.
+	owners := trustedOwners()
+	if err := changeableOnlyBy(exe, owners); err != nil {
+		return fmt.Errorf("%w, so others could replace %s; move it to /usr/local/bin first", err, exe)
+	}
+	config, err := filepath.EvalSymlinks(configPath)
+	if err != nil {
+		return err
+	}
+	if err := changeableOnlyBy(filepath.Dir(config), owners); err != nil {
+		return fmt.Errorf("%w, so others could replace %s; keep it in a folder only root can change, such as /etc/telltale", err, config)
 	}
 	uid, gid, created, err := ensureUser()
 	if err != nil {
@@ -114,6 +128,45 @@ func uninstallService(configPath string, purge bool) error {
 		fmt.Printf("kept %s (add --purge to remove it)\n", configPath)
 	}
 	return nil
+}
+
+// trustedOwners are the users who may own the Agent and the folders above it
+// and its config: root, and the admin running the install with sudo (who owns
+// /usr/local/bin on Intel Macs with Homebrew, and could become root anyway).
+func trustedOwners() map[uint32]bool {
+	owners := map[uint32]bool{0: true}
+	if uid, err := strconv.ParseUint(os.Getenv("SUDO_UID"), 10, 32); err == nil {
+		owners[uint32(uid)] = true
+	}
+	return owners
+}
+
+// changeableOnlyBy returns an error unless path and every folder above it are
+// owned by one of owners and writable by no one else, other than the wheel
+// and admin groups. path must have no symlinks in it.
+func changeableOnlyBy(path string, owners map[uint32]bool) error {
+	const wheel, admin = 0, 80
+	for p := path; ; p = filepath.Dir(p) {
+		fi, err := os.Lstat(p)
+		if err != nil {
+			return err
+		}
+		st, ok := fi.Sys().(*syscall.Stat_t)
+		if !ok {
+			return fmt.Errorf("cannot read the owner of %s", p)
+		}
+		switch perm := fi.Mode().Perm(); {
+		case !owners[st.Uid]:
+			return fmt.Errorf("%s is owned by user %d, not root", p, st.Uid)
+		case perm&0o002 != 0:
+			return fmt.Errorf("%s is writable by everyone", p)
+		case perm&0o020 != 0 && st.Gid != wheel && st.Gid != admin:
+			return fmt.Errorf("%s is writable by group %d", p, st.Gid)
+		}
+		if p == filepath.Dir(p) {
+			return nil
+		}
+	}
 }
 
 func executable() (string, error) {

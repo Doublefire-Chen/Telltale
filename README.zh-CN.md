@@ -125,7 +125,8 @@ sudo telltale-agent service install
 ```
 
 它以隐藏的 `_telltale-agent` 用户运行，日志写入 `/var/log/telltale-agent.log`。
-用 `service uninstall` 卸载（加 `--purge` 会同时删除配置文件）。
+用 `service uninstall` 卸载（加 `--purge` 会同时删除配置文件）。如果 root（或你）以外的人
+能替换 Agent 或配置文件，它会拒绝安装。
 
 安装程序永远不会修改你的 motd、shell 配置文件、`authorized_keys`、crontab、sysctl、
 防火墙、DNS 或软件源。

@@ -140,7 +140,8 @@ sudo telltale-agent service install
 
 It runs as a hidden `_telltale-agent` user and logs to
 `/var/log/telltale-agent.log`. Uninstall with `service uninstall`
-(add `--purge` to delete the config too).
+(add `--purge` to delete the config too). It refuses to install an Agent or
+config that anyone but root (or you) could replace.
 
 The installers never touch your motd, shell profiles, `authorized_keys`,
 crontab, sysctl, firewall, DNS or package sources.
