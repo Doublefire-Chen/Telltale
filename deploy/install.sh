@@ -184,7 +184,6 @@ install_agent() {
 	while [ $# -gt 0 ]; do
 		case "$1" in
 			--dashboard-url) url="${2:?}"; shift 2 ;;
-			--token) token="${2:?}"; shift 2 ;; # still accepted, but visible in ps
 			--token-file) token_file="${2:?}"; shift 2 ;;
 			--binary) binary="${2:?}"; shift 2 ;;
 			--version) version="${2:?}"; shift 2 ;;
@@ -196,15 +195,25 @@ install_agent() {
 	[ -n "$binary" ] || [ -n "$version" ] || die "give --binary PATH or --version vX.Y.Z"
 	[ -z "$version" ] || matches "$version" 'v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' || die "--version must look like v1.2.3"
 	[ -z "$sha256" ] || matches "$sha256" '[0-9a-f]{64}' || die "--sha256 must be 64 lowercase hex digits"
-	[ -z "$interval" ] || matches "$interval" '[0-9]+(\.[0-9]+)?(ms|s|m|h)' || die "--interval must be a duration such as 2s"
+	if [ -n "$interval" ]; then
+		matches "$interval" '[0-9]+(\.[0-9]+)?(ms|s|m|h)' || die "--interval must be a duration such as 2s"
+		# The Agent refuses to start below one second.
+		echo "$interval" | awk '{ n = $0 + 0; u = $0; sub(/^[0-9.]+/, "", u)
+			ms = n * (u == "ms" ? 1 : u == "s" ? 1000 : u == "m" ? 60000 : 3600000)
+			exit !(ms >= 1000) }' || die "--interval must be at least 1s"
+	fi
 	if [ -n "$url" ]; then
 		# Quotes, backslashes and whitespace would break out of the TOML
 		# string; the Agent itself checks the rest of the URL when it starts.
 		matches "$url" 'https?://[^[:space:]"\\@/?#]+(/[^[:space:]"\\?#]*)?' ||
 			die "--dashboard-url must be a plain http(s) URL such as https://status.example.com"
-		[ -n "$token" ] || token=$(read_token "$token_file")
+		# As the Agent does: plain http only to this machine, since the
+		# token would otherwise cross the network in the clear.
+		matches "$url" 'https://.*|http://(localhost|127\.[0-9]+\.[0-9]+\.[0-9]+|\[::1\])(:[0-9]+)?(/.*)?' ||
+			die "--dashboard-url must use https (plain http is allowed only for a loopback address)"
+		token=$(read_token "$token_file")
 		matches "$token" 'tt_[A-Za-z0-9_-]+' || die 'the Host token must be the one the Dashboard showed (it starts with "tt_")'
-	elif [ -n "$token" ] || [ -n "$token_file" ] || [ -n "$interval" ]; then
+	elif [ -n "$token_file" ] || [ -n "$interval" ]; then
 		die "a token or interval needs --dashboard-url too"
 	fi
 	[ -f "$CONFIG" ] || [ -n "$url" ] || die "first install needs --dashboard-url"
