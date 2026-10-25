@@ -40,6 +40,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue' # Invoke-WebRequest is many times slower with its progress bar
 
+# PowerShell 7 runs on Linux and macOS too, where install.sh is the installer
+# (and where the Windows paths below do not exist).
+if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) {
+	throw 'telltale install: this installer is for Windows; on Linux and macOS copy the install.sh command from the Dashboard'
+}
+
 $Repo = 'Doublefire-Chen/Telltale'
 $ServiceName = 'telltale-agent'
 $BinDir = Join-Path $env:ProgramFiles 'Telltale'
@@ -241,9 +247,5 @@ function Uninstall-Agent {
 	}
 }
 
-# PowerShell 7 runs on Linux and macOS too, where install.sh is the installer.
-if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) {
-	Die 'this installer is for Windows; on Linux and macOS copy the install.sh command from the Dashboard'
-}
 Assert-Administrator
 if ($Action -eq 'install') { Install-Agent } else { Uninstall-Agent }
