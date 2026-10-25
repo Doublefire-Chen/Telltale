@@ -321,8 +321,13 @@ install_agent() {
 		fetch "$version" "$sha256" "$tmp_bin"
 	fi
 	mkdir -p "$(dirname "$BIN")"
-	install -o root -g "$ROOT_GROUP" -m 0755 "$tmp_bin" "$BIN"
+	# Not install(1), which OpenWrt lacks; the rename also replaces a running
+	# binary in one step.
+	cp "$tmp_bin" "$BIN.new"
 	rm -f "$tmp_bin"
+	chown "root:$ROOT_GROUP" "$BIN.new"
+	chmod 0755 "$BIN.new"
+	mv -f "$BIN.new" "$BIN"
 	say "installed $BIN (${version:-from $binary}, sha256 $(sha256_of "$BIN"))"
 
 	mkdir -p "$CONFIG_DIR"
