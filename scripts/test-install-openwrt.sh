@@ -11,20 +11,22 @@ set -eu
 
 NAME=telltale-openwrt-test
 IMAGE=openwrt/rootfs:x86-64-v25.12.4
-PORT=18480
 WORK=$(mktemp -d)
 trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 ok() { echo "ok: $*"; }
 run_in() { docker exec "$NAME" sh -c "$1"; }
+# api calls the Dashboard from inside the container's network namespace, as a
+# local client, with curl (OpenWrt has none by default).
+api() { docker run --rm --network "container:$NAME" --user "$(id -u)" -v "$WORK:/work" curlimages/curl:8.11.1 -fs -b /work/jar -c /work/jar "$@"; }
 
 echo "building linux/amd64 binaries"
 for cmd in telltale-agent telltale-dashboard; do
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags '-s -w -X github.com/Doublefire-Chen/Telltale/internal/version.Version=v0.0.0-test' -o "$WORK/$cmd" "./cmd/$cmd"
 done
 
-docker run -d --name "$NAME" --privileged -p "127.0.0.1:$PORT:8080" "$IMAGE" /sbin/init >/dev/null
+docker run -d --name "$NAME" --privileged "$IMAGE" /sbin/init >/dev/null
 for _ in $(seq 30); do
 	run_in 'ubus call service list >/dev/null 2>&1' && break
 	sleep 1
@@ -37,13 +39,13 @@ docker cp "$WORK/telltale-dashboard" "$NAME:/root/telltale-dashboard"
 docker cp deploy/install.sh "$NAME:/root/install.sh"
 
 echo "starting a Dashboard in the container"
-run_in 'mkdir -p /tmp/dash && printf "listen = [\"0.0.0.0:8080\"]\ndata_dir = \"/tmp/dash\"\n" > /tmp/dash.toml
+run_in 'mkdir -p /tmp/dash && printf "listen = [\"127.0.0.1:8080\"]\ndata_dir = \"/tmp/dash\"\n" > /tmp/dash.toml
 	printf "openwrt test pw\nopenwrt test pw\n" | /root/telltale-dashboard -config /tmp/dash.toml admin set-password >/dev/null'
-docker exec -d "$NAME" /root/telltale-dashboard -config /tmp/dash.toml
-for _ in $(seq 20); do curl -fs -o /dev/null "http://127.0.0.1:$PORT/" && break; sleep 0.5; done
-curl -fs -c "$WORK/jar" -o /dev/null -X POST -H 'Content-Type: application/json' \
-	-d '{"username":"admin","password":"openwrt test pw"}' "http://127.0.0.1:$PORT/api/session" || fail "cannot log in to the Dashboard"
-TOKEN=$(curl -fs -b "$WORK/jar" -X POST -H 'Content-Type: application/json' -d '{"name":""}' "http://127.0.0.1:$PORT/api/hosts" |
+docker exec -d "$NAME" sh -c '/root/telltale-dashboard -config /tmp/dash.toml >/tmp/dash.log 2>&1'
+for _ in $(seq 20); do api -o /dev/null http://127.0.0.1:8080/ && break; sleep 0.5; done
+api -o /dev/null -X POST -H 'Content-Type: application/json' -d '{"username":"admin","password":"openwrt test pw"}' \
+	http://127.0.0.1:8080/api/session || { run_in 'cat /tmp/dash.log'; fail "cannot log in to the Dashboard"; }
+TOKEN=$(api -X POST -H 'Content-Type: application/json' -d '{"name":""}' http://127.0.0.1:8080/api/hosts |
 	sed 's/.*"token":"\([^"]*\)".*/\1/')
 
 echo "installing the Agent"
@@ -62,7 +64,7 @@ run_in "grep -q '^Uid:[[:space:]]*[1-9]' /proc/$pid/status" || fail "the Agent r
 run_in "test \"\$(awk '/^CapEff/{print \$2}' /proc/$pid/status)\" = 0000000000000000" || fail "the Agent has capabilities"
 ok "the Agent runs as telltale-agent with no capabilities"
 
-STATUS=$(curl -fs -b "$WORK/jar" "http://127.0.0.1:$PORT/api/status")
+STATUS=$(api http://127.0.0.1:8080/api/status)
 printf '%s' "$STATUS" | grep -q '"online":true' || fail "Host is not online: $STATUS"
 ok "the Agent reports"
 
