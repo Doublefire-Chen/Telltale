@@ -1,6 +1,20 @@
 package version
 
-import "testing"
+import (
+	"maps"
+	"testing"
+)
+
+func TestAgentHashes(t *testing.T) {
+	a, b := "7d28c965155e5afbe898b6aa00589e4b60374f6e1b33d6a37077f5acb52e6f06", "c338c31f6a347020eb4c969c5a1e9b3ce84c145464167f38fd78e146aac688fc"
+	got := AgentHashes("linux-amd64=" + a + ",darwin-arm64=" + b + ",bad=xyz,=" + a + ",windows-amd64=" + a[:63] + "G")
+	if want := map[string]string{"linux-amd64": a, "darwin-arm64": b}; !maps.Equal(got, want) {
+		t.Fatalf("AgentHashes = %v, want %v", got, want)
+	}
+	if got := AgentHashes(""); len(got) != 0 {
+		t.Fatalf("AgentHashes(\"\") = %v", got)
+	}
+}
 
 func TestOlder(t *testing.T) {
 	for _, tc := range []struct {

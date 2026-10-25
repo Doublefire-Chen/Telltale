@@ -13,6 +13,25 @@ import (
 // Version is the release version, or "dev" for an unreleased build.
 var Version = "dev"
 
+// AgentSHA256 lists the SHA-256 of each Agent binary released with this
+// build, as "linux-amd64=HASH,darwin-arm64=HASH,...". The release build sets
+// it on the Dashboard, so the install commands it shows can pin the download
+// without the Host needing cosign. Empty for other builds.
+var AgentSHA256 = ""
+
+// AgentHashes parses AgentSHA256 into a map from "os-arch" to hash, leaving
+// out anything malformed.
+func AgentHashes(list string) map[string]string {
+	hashes := map[string]string{}
+	for _, pair := range strings.Split(list, ",") {
+		platform, hash, ok := strings.Cut(pair, "=")
+		if ok && platform != "" && len(hash) == 64 && strings.Trim(hash, "0123456789abcdef") == "" {
+			hashes[platform] = hash
+		}
+	}
+	return hashes
+}
+
 // Older reports whether release version a is older than b. Versions look like
 // "v1.2.3" (a leading "v" and any "-pre" or "+build" suffix are ignored).
 // Anything unparseable, such as "dev", is never considered older.

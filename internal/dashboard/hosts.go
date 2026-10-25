@@ -59,8 +59,11 @@ const addressMaxAge = 3 * time.Hour
 
 type statusResponse struct {
 	// DashboardVersion is this Dashboard's release version.
-	DashboardVersion string     `json:"dashboard_version"`
-	Hosts            []hostView `json:"hosts"`
+	DashboardVersion string `json:"dashboard_version"`
+	// AgentSHA256 maps "os-arch" to the hash of the Agent released with this
+	// Dashboard, for the install commands (admin only).
+	AgentSHA256 map[string]string `json:"agent_sha256,omitempty"`
+	Hosts       []hostView        `json:"hosts"`
 }
 
 // handleStatus serves the Status page: every Host with its latest Report.
@@ -78,6 +81,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := statusResponse{DashboardVersion: s.version, Hosts: make([]hostView, 0, len(hosts))}
+	if admin {
+		resp.AgentSHA256 = s.agentSHA256
+	}
 	for _, h := range hosts {
 		if h.Hidden && !admin {
 			continue

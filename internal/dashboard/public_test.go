@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/Doublefire-Chen/Telltale/internal/dashboard"
 )
 
 func (h *harness) setPublic(session *http.Cookie, public bool) {
@@ -158,5 +160,34 @@ func TestPublicLiveFeedWithholdsHiddenHosts(t *testing.T) {
 			}
 			break
 		}
+	}
+}
+
+// TestAgentHashesOnlyForTheAdmin checks that the hashes the install commands
+// pin are served to the admin, and not to visitors of a public Status page,
+// who have no use for them.
+func TestAgentHashesOnlyForTheAdmin(t *testing.T) {
+	hash := strings.Repeat("ab", 32)
+	h := newHarness(t, nil, func(o *dashboard.Options) { o.AgentSHA256 = "linux-amd64=" + hash + ",windows-arm64=" + hash })
+	h.setPassword(testPassword)
+	session := h.loginOK()
+	h.setPublic(session, true)
+
+	hashes := func(session *http.Cookie) map[string]string {
+		var body struct {
+			AgentSHA256 map[string]string `json:"agent_sha256"`
+		}
+		resp := h.do(http.MethodGet, "/api/status", "", session)
+		expectStatus(t, resp, http.StatusOK)
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		return body.AgentSHA256
+	}
+	if got := hashes(session); got["linux-amd64"] != hash || got["windows-arm64"] != hash || len(got) != 2 {
+		t.Fatalf("admin got agent_sha256 %v", got)
+	}
+	if got := hashes(nil); got != nil {
+		t.Fatalf("visitor got agent_sha256 %v", got)
 	}
 }

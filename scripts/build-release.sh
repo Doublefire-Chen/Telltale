@@ -28,10 +28,15 @@ for goos in linux windows darwin; do
 		build telltale-agent "$goos" "$goarch"
 	done
 done
+if command -v sha256sum >/dev/null; then sum="sha256sum"; else sum="shasum -a 256"; fi
+
+# The Dashboard carries the Agents' hashes, so the install commands it shows
+# can pin the download on Hosts without cosign.
+agents=$(cd dist && $sum -- telltale-agent-* | awk '{ sub(/^telltale-agent-/, "", $2); sub(/\.exe$/, "", $2); printf "%s%s=%s", sep, $2, $1; sep = "," }')
+ldflags="$ldflags -X github.com/Doublefire-Chen/Telltale/internal/version.AgentSHA256=$agents"
 for goarch in amd64 arm64; do
 	build telltale-dashboard linux "$goarch"
 done
 
-if command -v sha256sum >/dev/null; then sum="sha256sum"; else sum="shasum -a 256"; fi
 (cd dist && $sum -- * > ../SHA256SUMS.tmp) && mv SHA256SUMS.tmp dist/SHA256SUMS
 cat dist/SHA256SUMS

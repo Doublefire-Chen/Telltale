@@ -62,6 +62,9 @@ type Options struct {
 	Logger *slog.Logger
 	// Version is this Dashboard's release version; defaults to version.Version.
 	Version string
+	// AgentSHA256 lists the hashes of the Agents released with it, in the
+	// form of version.AgentSHA256, which is the default.
+	AgentSHA256 string
 	// TrustedProxies are the reverse proxies whose forwarded-for headers are
 	// believed; nil means DefaultTrustedProxies.
 	TrustedProxies []netip.Prefix
@@ -86,6 +89,7 @@ type Server struct {
 	store          *store.Store
 	app            fs.FS
 	version        string
+	agentSHA256    map[string]string
 	trustedProxies []netip.Prefix
 	geoip          *geoip.DB
 	now            func() time.Time
@@ -95,9 +99,9 @@ type Server struct {
 	agentFailures *windowLimiter
 	// hostRequests rate-limits accepted Agent requests per Host.
 	hostRequests *windowLimiter
-	latest        latestReports
-	hub           hub
-	mux           *http.ServeMux
+	latest       latestReports
+	hub          hub
+	mux          *http.ServeMux
 
 	// hidden caches the IDs of Hidden Hosts (nil: reload); guarded by hiddenMu.
 	hiddenMu sync.Mutex
@@ -147,6 +151,7 @@ func New(opts Options) *Server {
 	if s.version == "" {
 		s.version = version.Version
 	}
+	s.agentSHA256 = version.AgentHashes(cmp.Or(opts.AgentSHA256, version.AgentSHA256))
 	s.trustedProxies = opts.TrustedProxies
 	if s.trustedProxies == nil {
 		s.trustedProxies = DefaultTrustedProxies
