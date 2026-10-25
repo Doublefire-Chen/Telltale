@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakeDSCL answers dscl the way a Mac with users 0, 1, 300 and groups 0, 301 would.
@@ -134,5 +135,29 @@ func TestChangeableOnlyBy(t *testing.T) {
 		if err := changeableOnlyBy(exe, us); err == nil || !strings.Contains(err.Error(), "writable by group") {
 			t.Fatalf("group-writable file: %v", err)
 		}
+	}
+}
+
+// TestWaitUnloadedWaitsForLaunchd checks that a reinstall bootstraps the
+// daemon only once launchd has finished removing the old one.
+func TestWaitUnloadedWaitsForLaunchd(t *testing.T) {
+	orig, origSleep := command, sleep
+	t.Cleanup(func() { command, sleep = orig, origSleep })
+	var calls []string
+	stillLoaded := 3
+	command = func(name string, args ...string) (string, error) {
+		calls = append(calls, strings.Join(args, " "))
+		if stillLoaded > 0 {
+			stillLoaded--
+			return "state = running", nil
+		}
+		return "", fmt.Errorf("Could not find service")
+	}
+	sleeps := 0
+	sleep = func(time.Duration) { sleeps++ }
+
+	waitUnloaded()
+	if len(calls) != 4 || sleeps != 3 {
+		t.Fatalf("checked %d times and slept %d times, want 4 and 3: %v", len(calls), sleeps, calls)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/Doublefire-Chen/Telltale/internal/agent"
 )
@@ -91,12 +92,29 @@ func installService(configPath string) error {
 		return err
 	}
 	fmt.Printf("wrote %s\n", plistPath)
-	command("launchctl", "bootout", "system/"+launchdLabel) // in case an older one is loaded
+	if _, err := command("launchctl", "bootout", "system/"+launchdLabel); err == nil { // an older one was loaded
+		waitUnloaded()
+	}
 	if _, err := command("launchctl", "bootstrap", "system", plistPath); err != nil {
 		return err
 	}
 	fmt.Printf("started %s as %s; logs go to %s\n", launchdLabel, agentUser, logPath)
 	return nil
+}
+
+// sleep waits between checks in waitUnloaded; tests replace it.
+var sleep = time.Sleep
+
+// waitUnloaded waits (up to 10s) until launchd has removed the daemon.
+// bootout returns before it has, and bootstrapping the daemon again before
+// then fails with "Bootstrap failed: 5: Input/output error".
+func waitUnloaded() {
+	for range 100 {
+		if _, err := command("launchctl", "print", "system/"+launchdLabel); err != nil {
+			return
+		}
+		sleep(100 * time.Millisecond)
+	}
 }
 
 func uninstallService(configPath string, purge bool) error {

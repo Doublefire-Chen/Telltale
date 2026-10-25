@@ -129,6 +129,8 @@ func TestServiceInstallReportsAndUninstalls(t *testing.T) {
 		if !strings.Contains(string(out), "_telltale-agent") {
 			t.Errorf("no process runs as _telltale-agent:\n%s", out)
 		}
+		// Installing again over the running daemon is how it is upgraded.
+		agent("service", "install")
 	}
 
 	out := agent("service", "uninstall", "--purge")
