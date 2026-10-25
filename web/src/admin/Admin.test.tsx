@@ -99,6 +99,8 @@ describe('admin panel', () => {
     expect(within(reveal).queryByText(/dashboard_url/)).toBeNull()
     const command = within(reveal).getByText(/install\.sh install/).textContent!
     expect(command).toContain('/Telltale/v1.2.0/deploy/install.sh')
+    expect(command).toContain('install.sh && sh install.sh install')
+    expect(command).not.toContain('sudo')
     expect(command).toContain(`--dashboard-url ${location.origin} --version v1.2.0`)
     expect(command).toContain(`--sha256 linux-amd64=${agentSHA256['linux-amd64']} --sha256 linux-arm64=${agentSHA256['linux-arm64']}`)
     expect(command).not.toContain('tt_')

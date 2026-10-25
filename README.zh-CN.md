@@ -96,19 +96,22 @@ Dashboard 监听 `127.0.0.1:8080` 和 `[::1]:8080`。请在前面放一个反向
 
 Dashboard 给出的命令与下面的类似。它取自 Dashboard 自己的发布标签，会询问 Host 令牌
 （因此令牌不会留在 shell 历史里），并用与该 Dashboard 同版本发布的 Agent 的哈希值校验下载。
+以 root 或能使用 `sudo` 的用户运行（它会询问你的密码）。
 运行前请先阅读安装脚本：它很短，并列出了会动的每一个文件。
 
 **Linux 和 macOS** —— [`deploy/install.sh`](deploy/install.sh)：
 
 ```sh
 curl -fsSLO https://raw.githubusercontent.com/Doublefire-Chen/Telltale/vX.Y.Z/deploy/install.sh
-sudo sh install.sh install --dashboard-url https://status.example.com --version vX.Y.Z \
+sh install.sh install --dashboard-url https://status.example.com --version vX.Y.Z \
   --sha256 linux-amd64=HASH --sha256 linux-arm64=HASH   # Mac 上为 darwin-…；装有 cosign 时可省略
 # 用 --token-file FILE（- 表示标准输入）代替提示输入；用 --binary ./telltale-agent 安装你手上已有的二进制文件
 ```
 
 在 Linux 上，它会创建无特权的 `telltale-agent` 用户，写入归 root 所有、只有该用户所在组能读取的配置文件，
-并启动一个加固过的 systemd 服务；它自己从不运行新的二进制文件。在 macOS 上，它交给
+并启动一个加固过的 systemd 服务；它自己从不运行新的二进制文件。在 OpenWrt 上，它用 OpenWrt 自带的辅助函数
+创建同样的用户，并以 procd 服务（`/etc/init.d/telltale-agent`，日志用 `logread` 查看）运行 Agent。
+OpenWrt 的 sysupgrade 不会保留 `/usr/local/bin` 和 `/etc/init.d/telltale-agent`，升级固件后请重新运行安装脚本。在 macOS 上，它交给
 `telltale-agent service install`，由 launchd 以隐藏的 `_telltale-agent` 用户运行 Agent，
 日志写入 `/var/log/telltale-agent.log`。
 
@@ -124,7 +127,7 @@ sudo sh install.sh install --dashboard-url https://status.example.com --version 
 只有它能读取配置文件。日志在事件查看器中。
 
 升级时只带 `--version`（`-Version`）或 `--binary`（`-Binary`）再运行一次安装脚本即可，配置会保留。
-完全卸载：`sudo sh install.sh uninstall`，或 `install.ps1 uninstall`。
+完全卸载：`sh install.sh uninstall`，或 `install.ps1 uninstall`。
 
 **在 macOS 或 Windows 上手动安装** —— 把 Agent 放到 `/usr/local/bin/` 或 `C:\Program Files\Telltale\`，
 按上面的路径保存配置，然后运行 `telltale-agent service install`（用 `sudo`，或以管理员身份）。

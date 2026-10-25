@@ -108,21 +108,26 @@ later, which immediately revokes the old one.
 The command from the Dashboard looks like the ones below. It comes from the
 Dashboard's own release tag, asks for the Host token so it never lands in
 your shell history, and pins the download to the hash of the Agent released
-with that Dashboard. Read the installer first; it is short and lists every
+with that Dashboard. Run it as root or as a user who can `sudo` (it asks for
+your password). Read the installer first; it is short and lists every
 file it touches.
 
 **Linux and macOS** — [`deploy/install.sh`](deploy/install.sh):
 
 ```sh
 curl -fsSLO https://raw.githubusercontent.com/Doublefire-Chen/Telltale/vX.Y.Z/deploy/install.sh
-sudo sh install.sh install --dashboard-url https://status.example.com --version vX.Y.Z \
+sh install.sh install --dashboard-url https://status.example.com --version vX.Y.Z \
   --sha256 linux-amd64=HASH --sha256 linux-arm64=HASH   # darwin-… on a Mac; or leave out with cosign
 # --token-file FILE (- for stdin) instead of the prompt; --binary ./telltale-agent for a binary you have
 ```
 
 On Linux it creates an unprivileged `telltale-agent` user, writes a
 root-owned config only that user's group can read, and starts a hardened
-systemd unit; it never runs the new binary itself. On macOS it hands over to
+systemd unit; it never runs the new binary itself. On OpenWrt it creates the
+same user with OpenWrt's own helpers and runs the Agent as a procd service
+(`/etc/init.d/telltale-agent`; logs in `logread`). OpenWrt's sysupgrade does
+not keep `/usr/local/bin` or `/etc/init.d/telltale-agent`, so run the
+installer again after one. On macOS it hands over to
 `telltale-agent service install`, which runs the Agent as a hidden
 `_telltale-agent` user under launchd, logging to `/var/log/telltale-agent.log`.
 
@@ -142,7 +147,7 @@ Event Viewer.
 
 To upgrade, run the installer again with just `--version` (`-Version`) or
 `--binary` (`-Binary`); it keeps the config. To remove everything:
-`sudo sh install.sh uninstall`, or `install.ps1 uninstall`.
+`sh install.sh uninstall`, or `install.ps1 uninstall`.
 
 **By hand on macOS or Windows** — put the Agent in `/usr/local/bin/` or
 `C:\Program Files\Telltale\`, save the config as above, and run

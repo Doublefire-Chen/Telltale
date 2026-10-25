@@ -188,7 +188,7 @@ function installCommand(os: InstallOS, release: string, agentSHA256: Record<stri
     return `& ([scriptblock]::Create((irm ${raw}/install.ps1))) -DashboardUrl ${location.origin} -Version ${release}${sha}`
   }
   const sha = pins.length === 2 ? pins.map((p) => ` --sha256 ${p}`).join('') : ''
-  return `curl -fsSLO ${raw}/install.sh && sudo sh install.sh install --dashboard-url ${location.origin} --version ${release}${sha}`
+  return `curl -fsSLO ${raw}/install.sh && sh install.sh install --dashboard-url ${location.origin} --version ${release}${sha}`
 }
 
 /**

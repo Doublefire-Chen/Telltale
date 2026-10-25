@@ -140,7 +140,7 @@ export const zhCN: Translation = {
     install: '安装命令',
     os: { linux: 'Linux', darwin: 'macOS', windows: 'Windows' },
     installBody: {
-      linux: '以 root 身份在该主机上运行下面的命令，并在它询问时粘贴下面的令牌。运行前请先阅读 install.sh。',
+      linux: '以 root 或能使用 sudo 的用户在该主机上运行下面的命令，并在它询问时粘贴下面的令牌。运行前请先阅读 install.sh。',
       darwin: '在 Mac 的“终端”中运行下面的命令（sudo 会要求输入你的密码），并在它询问时粘贴下面的令牌。运行前请先阅读 install.sh。',
       windows: '以管理员身份在 PowerShell 中运行下面的命令，并在它询问时粘贴下面的令牌。运行前请先阅读 install.ps1。',
     },

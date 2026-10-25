@@ -51,7 +51,7 @@ jobs:
       - run: go test -tags budget -v ./internal/e2e -run TestAgentBudget
 
   installer:
-    name: Installer and systemd units (Linux)
+    name: Installer and systemd units (Linux, OpenWrt)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -63,6 +63,8 @@ jobs:
       # Installs, checks and uninstalls the Agent with deploy/install.sh in a
       # Debian container running real systemd.
       - run: ./scripts/test-install-in-container.sh
+      # The same on OpenWrt, whose procd runs the Agent instead of systemd.
+      - run: ./scripts/test-install-openwrt.sh
 
   agent:
     name: Agent (${{ matrix.os }})

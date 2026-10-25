@@ -75,3 +75,27 @@ func TestWindowsInstallerRefusesOtherOSes(t *testing.T) {
 		t.Fatalf("got %v:\n%s", err, out)
 	}
 }
+
+// TestInstallerRerunsItselfWithSudo runs install.sh as a user who is not root,
+// as the Dashboard's command does on a VPS, and expects it to run itself
+// again with sudo, arguments intact.
+func TestInstallerRerunsItselfWithSudo(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("install.sh runs on Linux and macOS")
+	}
+	bin := t.TempDir()
+	for name, script := range map[string]string{
+		"id":   "#!/bin/sh\necho 1000\n",
+		"sudo": "#!/bin/sh\necho \"sudo $*\"\n",
+	} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command("sh", "install.sh", "install", "--version", "v1.2.3", "--sha256", "linux-amd64="+strings.Repeat("a", 64))
+	cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	out, err := cmd.CombinedOutput()
+	if want := "sudo sh install.sh install --version v1.2.3 --sha256 linux-amd64=" + strings.Repeat("a", 64); err != nil || strings.TrimSpace(string(out)) != want {
+		t.Fatalf("got %v: %q, want %q", err, out, want)
+	}
+}

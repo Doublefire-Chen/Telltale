@@ -17,8 +17,9 @@
 #   /usr/local/bin/telltale-agent                   the Agent
 #   /etc/telltale/agent.toml                        its config (root-owned, readable by the Agent's group)
 #   /etc/telltale/                                  removed on uninstall if empty
-#   Linux: /etc/systemd/system/telltale-agent.service, and the telltale-agent
-#   system user and group (no shell, no home)
+#   Linux: /etc/systemd/system/telltale-agent.service (on OpenWrt the procd
+#   service /etc/init.d/telltale-agent instead), and the telltale-agent system
+#   user and group (no shell, no home)
 #   macOS: what `telltale-agent service install` sets up: the launchd daemon
 #   in /Library/LaunchDaemons, /var/log/telltale-agent.log and the hidden
 #   _telltale-agent user
@@ -33,6 +34,7 @@ BIN="/usr/local/bin/telltale-agent"
 CONFIG_DIR="/etc/telltale"
 CONFIG="$CONFIG_DIR/agent.toml"
 UNIT="/etc/systemd/system/telltale-agent.service"
+INIT_SCRIPT="/etc/init.d/telltale-agent"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'telltale install: %s\n' "$*" >&2; exit 1; }
@@ -49,6 +51,31 @@ usage() {
 }
 
 has_systemd() { command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; }
+
+# OpenWrt runs services under procd, and has no useradd or adduser.
+is_openwrt() { [ -f /etc/openwrt_release ] && [ -x /sbin/procd ]; }
+
+# write_init_script writes the procd service OpenWrt runs the Agent with: as
+# its own user, restarted however often it exits.
+write_init_script() {
+	cat > "$INIT_SCRIPT" <<INIT
+#!/bin/sh /etc/rc.common
+# Telltale Agent, installed by install.sh.
+START=99
+USE_PROCD=1
+
+start_service() {
+	procd_open_instance
+	procd_set_param command $BIN -config $CONFIG
+	procd_set_param user $USER_NAME
+	procd_set_param respawn 3600 5 0
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_close_instance
+}
+INIT
+	chmod 0755 "$INIT_SCRIPT"
+}
 
 write_unit() {
 	cat > "$UNIT" <<'UNIT'
@@ -230,6 +257,13 @@ create_user() {
 	elif command -v adduser >/dev/null 2>&1; then # BusyBox (Alpine)
 		addgroup -S "$USER_NAME"
 		adduser -S -D -H -h /nonexistent -s "$nologin" -G "$USER_NAME" "$USER_NAME"
+	elif is_openwrt; then # with the helpers its own packages use
+		(
+			set +u
+			. /lib/functions.sh
+			gid=$(group_add_next "$USER_NAME")
+			user_add "$USER_NAME" "" "$gid" "$USER_NAME" /nonexistent /bin/false
+		)
 	else
 		die "cannot create the $USER_NAME user: neither useradd nor adduser found"
 	fi
@@ -323,6 +357,14 @@ install_agent() {
 	chmod 0640 "$CONFIG"
 	say "made $CONFIG readable only by root and the $USER_NAME group"
 
+	if is_openwrt; then
+		write_init_script
+		say "wrote $INIT_SCRIPT"
+		"$INIT_SCRIPT" enable
+		"$INIT_SCRIPT" restart
+		say "started telltale-agent; check it with: logread -e telltale-agent"
+		return
+	fi
 	write_unit
 	say "wrote $UNIT"
 	if has_systemd; then
@@ -353,6 +395,12 @@ uninstall_agent() {
 	if has_systemd && [ -f "$UNIT" ]; then
 		systemctl disable --now telltale-agent.service >/dev/null 2>&1 || true
 	fi
+	if [ -x "$INIT_SCRIPT" ] && grep -q '^# Telltale Agent' "$INIT_SCRIPT"; then
+		"$INIT_SCRIPT" stop >/dev/null 2>&1 || true
+		"$INIT_SCRIPT" disable >/dev/null 2>&1 || true
+		rm -f "$INIT_SCRIPT"
+		say "removed $INIT_SCRIPT"
+	fi
 	for path in "$UNIT" "$BIN" "$CONFIG"; do
 		if [ -e "$path" ]; then
 			rm -f "$path"
@@ -370,6 +418,8 @@ uninstall_agent() {
 		if command -v userdel >/dev/null 2>&1; then
 			userdel "$USER_NAME"
 			getent group "$USER_NAME" >/dev/null 2>&1 && groupdel "$USER_NAME"
+		elif is_openwrt; then # added by create_user with OpenWrt's helpers
+			sed -i "/^$USER_NAME:/d" /etc/passwd /etc/shadow /etc/group
 		else
 			deluser "$USER_NAME" 2>/dev/null || true
 			delgroup "$USER_NAME" 2>/dev/null || true
@@ -378,7 +428,11 @@ uninstall_agent() {
 	fi
 }
 
-[ "$(id -u)" -eq 0 ] || die "run as root (e.g. sudo sh install.sh ...)"
+# Root is needed; a user who can sudo gets asked for their password.
+if [ "$(id -u)" -ne 0 ]; then
+	command -v sudo >/dev/null 2>&1 || die "run as root"
+	exec sudo sh "$0" "$@"
+fi
 case "${1:-}" in
 	install) shift; install_agent "$@" ;;
 	uninstall) uninstall_agent ;;

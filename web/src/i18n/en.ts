@@ -139,7 +139,7 @@ export const en = {
     install: 'Install command',
     os: { linux: 'Linux', darwin: 'macOS', windows: 'Windows' },
     installBody: {
-      linux: 'Run this on the Host as root, and paste the token below when it asks. Read install.sh first.',
+      linux: 'Run this on the Host as root or as a user who can sudo, and paste the token below when it asks. Read install.sh first.',
       darwin: 'Run this in Terminal on the Mac (sudo asks for your password), and paste the token below when it asks. Read install.sh first.',
       windows: 'Run this in PowerShell as Administrator, and paste the token below when it asks. Read install.ps1 first.',
     },
