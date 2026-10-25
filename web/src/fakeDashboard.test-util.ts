@@ -37,6 +37,11 @@ export class FakeWebSocket {
  * stubDashboard replaces fetch and WebSocket with an in-memory stand-in for
  * the Dashboard's frontend API, and returns its mutable state.
  */
+/** The Agent hashes the fake Dashboard serves, one per platform. */
+export const agentSHA256: Record<string, string> = Object.fromEntries(
+  ['linux', 'darwin', 'windows'].flatMap((os, i) => ['amd64', 'arm64'].map((arch, j) => [`${os}-${arch}`, String(2 * i + j).repeat(64)])),
+)
+
 export function stubDashboard(opts: FakeDashboardOptions = {}) {
   const state = {
     setupRequired: opts.setupRequired ?? false,
@@ -77,7 +82,7 @@ export function stubDashboard(opts: FakeDashboardOptions = {}) {
         return new Response(null, { status: 204 })
       }
       if (path === '/api/status' && (state.authenticated || state.statusPublic)) {
-        return json(200, { dashboard_version: 'v1.2.0', hosts: state.hosts })
+        return json(200, { dashboard_version: 'v1.2.0', agent_sha256: agentSHA256, hosts: state.hosts })
       }
       const hist = path.match(/^\/api\/hosts\/([^/]+)\/history\?range=(\w+)$/)
       // As the real Dashboard: the admin sees every Host's history; visitors of

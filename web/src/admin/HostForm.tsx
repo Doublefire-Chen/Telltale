@@ -160,22 +160,47 @@ type TokenModalProps = {
   title: string
   token: string
   dashboardVersion: string
+  /** SHA-256 of each Agent released with this Dashboard, by "os-arch". */
+  agentSHA256: Record<string, string>
   onDone: () => void
 }
 
+type InstallOS = 'linux' | 'darwin' | 'windows'
+
+const installOSes: { os: InstallOS; icon: 'ubuntu' | 'apple' | 'windows' }[] = [
+  { os: 'linux', icon: 'ubuntu' },
+  { os: 'darwin', icon: 'apple' },
+  { os: 'windows', icon: 'windows' },
+]
+
 /**
- * TokenModal shows a Host token once, with a Linux install command and a
- * ready-to-save Agent config. The Dashboard keeps only the token's hash.
+ * installCommand is the one-line install for os, from this Dashboard's own
+ * release tag. It asks for the token, so the token stays out of the command
+ * and shell history, and pins every CPU type's Agent by hash when the
+ * Dashboard knows them, so the Host needs no cosign. Empty for a dev build.
  */
-export function TokenModal({ title, token, dashboardVersion, onDone }: TokenModalProps) {
+function installCommand(os: InstallOS, release: string, agentSHA256: Record<string, string>): string {
+  if (!release) return ''
+  const pins = ['amd64', 'arm64'].map((arch) => `${os}-${arch}`).filter((p) => agentSHA256[p]).map((p) => `${p}=${agentSHA256[p]}`)
+  const raw = `https://raw.githubusercontent.com/Doublefire-Chen/Telltale/${release}/deploy`
+  if (os === 'windows') {
+    const sha = pins.length === 2 ? ` -Sha256 ${pins.map((p) => `'${p}'`).join(',')}` : ''
+    return `& ([scriptblock]::Create((irm ${raw}/install.ps1))) -DashboardUrl ${location.origin} -Version ${release}${sha}`
+  }
+  const sha = pins.length === 2 ? pins.map((p) => ` --sha256 ${p}`).join('') : ''
+  return `curl -fsSLO ${raw}/install.sh && sudo sh install.sh install --dashboard-url ${location.origin} --version ${release}${sha}`
+}
+
+/**
+ * TokenModal shows a Host token once, with an install command for Linux,
+ * macOS or Windows that asks for it. The Dashboard keeps only the token's hash.
+ */
+export function TokenModal({ title, token, dashboardVersion, agentSHA256, onDone }: TokenModalProps) {
   const { t } = useTranslation()
-  const config = `dashboard_url = "${location.origin}"\ntoken = "${token}"\n`
-  // The installer from this Dashboard's own release tag; it asks for the
-  // token, so the token stays out of the command and shell history.
+  const [os, setOS] = useState<InstallOS>('linux')
   const release = /^v\d+\.\d+\.\d+$/.test(dashboardVersion) ? dashboardVersion : ''
-  const command = release
-    ? `curl -fsSLO https://raw.githubusercontent.com/Doublefire-Chen/Telltale/${release}/deploy/install.sh && sudo sh install.sh install --dashboard-url ${location.origin} --version ${release}`
-    : ''
+  const command = installCommand(os, release, agentSHA256)
+  const pinned = command.includes('sha256') || command.includes('Sha256')
 
   return (
     <Modal
@@ -190,13 +215,25 @@ export function TokenModal({ title, token, dashboardVersion, onDone }: TokenModa
       }
     >
       <div className="ui warning message">{t('token.once')}</div>
-      {command && (
+      {release && (
         <section className="copy-block">
-          <h3>
-            <Icon name="ubuntu" /> {t('token.linux')}
-          </h3>
-          <p>{t('token.linuxBody')}</p>
-          <CopyField label={t('token.linux')} value={command} />
+          <div className="ui mini buttons install-os" role="group" aria-label={t('token.install')}>
+            {installOSes.map(({ os: o, icon }) => (
+              <button
+                key={o}
+                type="button"
+                className={`ui button${o === os ? ' primary' : ''}`}
+                aria-pressed={o === os}
+                onClick={() => setOS(o)}
+              >
+                <Icon name={icon} /> {t(`token.os.${o}`)}
+              </button>
+            ))}
+          </div>
+          <p>
+            {t(`token.installBody.${os}`)} {pinned ? t('token.pinned') : t('token.needsCosign')}
+          </p>
+          <CopyField label={t('token.install')} value={command} />
         </section>
       )}
       <section className="copy-block">
@@ -204,31 +241,24 @@ export function TokenModal({ title, token, dashboardVersion, onDone }: TokenModa
           <Icon name="key" /> {t('token.tokenLabel')}
         </h3>
         <CopyField label={t('token.tokenLabel')} value={token} />
-      </section>
-      <section className="copy-block">
-        <h3>
-          <Icon name="clipboard" /> {t('token.config')}
-        </h3>
-        <p>{t('token.configBody')}</p>
-        <CopyField label={t('token.config')} value={config} multiline />
+        <p>
+          {t('token.manual')}{' '}
+          <a href="https://github.com/Doublefire-Chen/Telltale#3-the-agent" target="_blank" rel="noreferrer">
+            README
+          </a>
+        </p>
       </section>
     </Modal>
   )
 }
 
 /** CopyField shows a value as code, with a green copy button like Nezha's. */
-function CopyField({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
+function CopyField({ label, value }: { label: string; value: string }) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   return (
     <div className="copy-field">
-      {multiline ? (
-        <pre>
-          <code>{value}</code>
-        </pre>
-      ) : (
-        <code className="one-line">{value}</code>
-      )}
+      <code className="one-line">{value}</code>
       <button
         type="button"
         className="ui green mini icon-only button"

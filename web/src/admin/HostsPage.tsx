@@ -20,12 +20,13 @@ type Dialog =
 type HostsPageProps = {
   hosts: Host[]
   dashboardVersion: string
+  agentSHA256: Record<string, string>
   reload: () => Promise<void>
   toast: (t: ToastMessage) => void
 }
 
 /** HostsPage is the admin's table of Hosts, after Nezha V0's server page. */
-export function HostsPage({ hosts, dashboardVersion, reload, toast }: HostsPageProps) {
+export function HostsPage({ hosts, dashboardVersion, agentSHA256, reload, toast }: HostsPageProps) {
   const { t } = useTranslation()
   const [, navigate] = useRoute()
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -223,7 +224,13 @@ export function HostsPage({ hosts, dashboardVersion, reload, toast }: HostsPageP
         />
       )}
       {dialog?.kind === 'token' && (
-        <TokenModal title={dialog.title} token={dialog.token} dashboardVersion={dashboardVersion} onDone={() => setDialog(null)} />
+        <TokenModal
+          title={dialog.title}
+          token={dialog.token}
+          dashboardVersion={dashboardVersion}
+          agentSHA256={agentSHA256}
+          onDone={() => setDialog(null)}
+        />
       )}
       {dialog?.kind === 'regenerate' && (
         <Confirm

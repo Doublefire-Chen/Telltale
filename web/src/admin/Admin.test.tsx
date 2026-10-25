@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Host } from '../api'
 import { App } from '../App'
-import { stubDashboard } from '../fakeDashboard.test-util'
+import { agentSHA256, stubDashboard } from '../fakeDashboard.test-util'
 import i18n from '../i18n'
 
 function host(h: Partial<Host> & Pick<Host, 'id'>): Host {
@@ -95,16 +95,42 @@ describe('admin panel', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Add Host' }))
 
     const reveal = await screen.findByRole('dialog', { name: 'Host “Tokyo-Vultr” added' })
-    expect(within(reveal).getByText(/token = "tt_A+"/).textContent).toContain(`dashboard_url = "${location.origin}"`)
+    expect(within(reveal).getByText(/^tt_A+$/)).toBeTruthy()
+    expect(within(reveal).queryByText(/dashboard_url/)).toBeNull()
     const command = within(reveal).getByText(/install\.sh install/).textContent!
     expect(command).toContain('/Telltale/v1.2.0/deploy/install.sh')
     expect(command).toContain(`--dashboard-url ${location.origin} --version v1.2.0`)
+    expect(command).toContain(`--sha256 linux-amd64=${agentSHA256['linux-amd64']} --sha256 linux-arm64=${agentSHA256['linux-arm64']}`)
     expect(command).not.toContain('tt_')
     expect(dash.requests.at(-1)).toMatchObject({ method: 'PATCH', body: { group: 'Asia' } })
     expect(row('Tokyo-Vultr')).toBeTruthy()
 
     await user.click(within(reveal).getByRole('button', { name: 'Done' }))
     expect(screen.queryByText(/tt_A+/)).toBeNull()
+  })
+
+  it('offers an install command for macOS and Windows too, pinned to their Agents', async () => {
+    const user = userEvent.setup()
+    stubDashboard({ authenticated: true })
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Add Host' }))
+    await user.click(within(screen.getByRole('dialog', { name: 'Add Host' })).getByRole('button', { name: 'Add Host' }))
+    const reveal = await screen.findByRole('dialog', { name: /added/ })
+
+    await user.click(within(reveal).getByRole('button', { name: 'macOS' }))
+    expect(within(reveal).getByRole('button', { name: 'macOS' }).getAttribute('aria-pressed')).toBe('true')
+    const mac = within(reveal).getByText(/install\.sh install/).textContent!
+    expect(mac).toContain(`--sha256 darwin-amd64=${agentSHA256['darwin-amd64']} --sha256 darwin-arm64=${agentSHA256['darwin-arm64']}`)
+    expect(mac).not.toContain('linux-')
+
+    await user.click(within(reveal).getByRole('button', { name: 'Windows' }))
+    const windows = within(reveal).getByText(/scriptblock/).textContent!
+    expect(windows).toBe(
+      "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Doublefire-Chen/Telltale/v1.2.0/deploy/install.ps1))) " +
+        `-DashboardUrl ${location.origin} -Version v1.2.0 ` +
+        `-Sha256 'windows-amd64=${agentSHA256['windows-amd64']}','windows-arm64=${agentSHA256['windows-arm64']}'`,
+    )
+    expect(windows).not.toContain('tt_')
   })
 
   it('adds a Host without a name', async () => {
@@ -188,7 +214,7 @@ describe('admin panel', () => {
 
     expect(dash.requests.at(-1)).toMatchObject({ method: 'POST', path: '/api/hosts/h1/token' })
     const reveal = await screen.findByRole('dialog', { name: 'New token for web-1' })
-    expect(within(reveal).getByText(/token = "tt_N+"/)).toBeTruthy()
+    expect(within(reveal).getByText(/^tt_N+$/)).toBeTruthy()
     await user.click(within(reveal).getByRole('button', { name: 'Done' }))
     expect(screen.queryByText(/tt_N+/)).toBeNull()
   })

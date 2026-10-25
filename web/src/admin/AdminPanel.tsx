@@ -18,7 +18,7 @@ import './admin.css'
 export function AdminPanel({ onLoggedOut, onUnauthorized }: { onLoggedOut: () => Promise<void>; onUnauthorized: () => void }) {
   const { t } = useTranslation()
   const [route] = useRoute()
-  const { hosts, dashboardVersion, failed, reload } = useHosts(onUnauthorized)
+  const { hosts, dashboardVersion, agentSHA256, failed, reload } = useHosts(onUnauthorized)
   const [toast, setToast] = useState<ToastMessage | null>(null)
   const [confirmingLogout, setConfirmingLogout] = useState(false)
   const showToast = useCallback((m: ToastMessage) => setToast(m), [])
@@ -37,7 +37,7 @@ export function AdminPanel({ onLoggedOut, onUnauthorized }: { onLoggedOut: () =>
       {failed && <div className="ui error message" role="alert">{t('app.error')}</div>}
       {!failed && !hosts && <p>{t('app.loading')}</p>}
       {hosts && route.kind === 'admin-hosts' && (
-        <HostsPage hosts={hosts} dashboardVersion={dashboardVersion} reload={reload} toast={showToast} />
+        <HostsPage hosts={hosts} dashboardVersion={dashboardVersion} agentSHA256={agentSHA256} reload={reload} toast={showToast} />
       )}
       {hosts && route.kind === 'admin-host' && (
         <ErrorBoundary

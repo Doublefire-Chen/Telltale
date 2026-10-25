@@ -78,6 +78,8 @@ export type HostUpdate = Partial<Pick<Host, 'name' | 'group' | 'hidden' | 'publi
 
 export type Status = {
   dashboard_version: string
+  /** SHA-256 of each Agent released with this Dashboard, by "os-arch" (admin only). */
+  agent_sha256?: Record<string, string>
   hosts: Host[]
 }
 

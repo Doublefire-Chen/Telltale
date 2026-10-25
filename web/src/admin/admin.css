@@ -796,14 +796,17 @@ body.dimmed {
   font-size: 0.92857143em;
 }
 
+.nz .install-os {
+  margin-bottom: 0.6em;
+}
+
 .nz .copy-field {
   display: flex;
   align-items: flex-start;
   gap: 0.5em;
 }
 
-.nz .copy-field > code,
-.nz .copy-field > pre {
+.nz .copy-field > code {
   flex: 1;
   min-width: 0;
 }

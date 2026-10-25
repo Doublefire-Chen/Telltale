@@ -24,6 +24,7 @@ export function byGroup(hosts: Host[]): { group: string; hosts: Host[] }[] {
 export type HostsState = {
   hosts: Host[] | null
   dashboardVersion: string
+  agentSHA256: Record<string, string>
   failed: boolean
   reload: () => Promise<void>
 }
@@ -36,6 +37,7 @@ export type HostsState = {
 export function useHosts(onUnauthorized: () => void): HostsState {
   const [hosts, setHosts] = useState<Host[] | null>(null)
   const [dashboardVersion, setDashboardVersion] = useState('')
+  const [agentSHA256, setAgentSHA256] = useState<Record<string, string>>({})
   const [failed, setFailed] = useState(false)
 
   const reload = useCallback(async () => {
@@ -43,6 +45,7 @@ export function useHosts(onUnauthorized: () => void): HostsState {
       const status = await getStatus()
       setHosts(status.hosts)
       setDashboardVersion(status.dashboard_version)
+      setAgentSHA256(status.agent_sha256 ?? {})
       setFailed(false)
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -65,7 +68,7 @@ export function useHosts(onUnauthorized: () => void): HostsState {
     setHosts((prev) => prev?.map((h) => (h.id === msg.host_id ? { ...h, report: msg.report, online: true } : h)) ?? prev)
   })
 
-  return { hosts, dashboardVersion, failed, reload }
+  return { hosts, dashboardVersion, agentSHA256, failed, reload }
 }
 
 /**
