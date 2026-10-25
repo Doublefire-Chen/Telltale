@@ -68,10 +68,11 @@ cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
 sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
 ```
 
-`install.sh --version` does both checks itself when `cosign` is installed.
-Without it, the installer refuses to download unless you pass `--sha256` with
-the binary's checksum from a `SHA256SUMS` you verified as above on another
-machine.
+`install.sh --version` and `install.ps1 -Version` do both checks themselves
+when `cosign` is installed. Without it, they refuse to download unless you
+pass `--sha256` (`-Sha256`) with the binary's checksum; the install command
+the Dashboard shows does that for you, with the hashes of the Agents
+released with it.
 
 ### 1. The Dashboard (Linux)
 
@@ -97,51 +98,57 @@ both of a Host's addresses. An IPv4-only Dashboard only ever shows IPv4.
 ### 2. Add a Host
 
 Log in, open the **Admin panel** and click **Add Host** (leave the name blank
-to use the machine's hostname). It shows the Host token with a ready-made
-Linux install command and the Agent config, **only once**; the Dashboard keeps
-just its hash. You can regenerate the token later, which immediately revokes
-the old one.
+to use the machine's hostname). It shows the Host token, **only once**, with
+a one-line install command for Linux, macOS or Windows and the Agent config;
+the Dashboard keeps just the token's hash. You can regenerate the token
+later, which immediately revokes the old one.
 
 ### 3. The Agent
 
-**Linux** — read [`deploy/install.sh`](deploy/install.sh) first; it is short
-and says exactly which files it touches.
+The command from the Dashboard looks like the ones below. It comes from the
+Dashboard's own release tag, asks for the Host token so it never lands in
+your shell history, and pins the download to the hash of the Agent released
+with that Dashboard. Read the installer first; it is short and lists every
+file it touches.
+
+**Linux and macOS** — [`deploy/install.sh`](deploy/install.sh):
 
 ```sh
-sudo sh install.sh install --dashboard-url https://status.example.com --version vX.Y.Z
-# it asks for the Host token; or pass --token-file FILE (- for stdin)
-# without cosign: add --sha256 HASH; with a binary you already have: --binary ./telltale-agent
+curl -fsSLO https://raw.githubusercontent.com/Doublefire-Chen/Telltale/vX.Y.Z/deploy/install.sh
+sudo sh install.sh install --dashboard-url https://status.example.com --version vX.Y.Z \
+  --sha256 linux-amd64=HASH --sha256 linux-arm64=HASH   # darwin-… on a Mac; or leave out with cosign
+# --token-file FILE (- for stdin) instead of the prompt; --binary ./telltale-agent for a binary you have
 ```
 
-It creates an unprivileged `telltale-agent` user, writes a root-owned config
-only that user's group can read, and starts a hardened systemd unit. It never
-runs the new binary itself. To upgrade, run it again with just `--version` or
-`--binary`. To remove everything: `sudo sh install.sh uninstall`.
+On Linux it creates an unprivileged `telltale-agent` user, writes a
+root-owned config only that user's group can read, and starts a hardened
+systemd unit; it never runs the new binary itself. On macOS it hands over to
+`telltale-agent service install`, which runs the Agent as a hidden
+`_telltale-agent` user under launchd, logging to `/var/log/telltale-agent.log`.
 
-**Windows** (as Administrator) — put `telltale-agent.exe` in
-`C:\Program Files\Telltale\`, save the config as
-`C:\ProgramData\Telltale\agent.toml`, then:
+**Windows** — [`deploy/install.ps1`](deploy/install.ps1), in PowerShell as
+Administrator:
 
 ```powershell
-& "C:\Program Files\Telltale\telltale-agent.exe" service install
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Doublefire-Chen/Telltale/vX.Y.Z/deploy/install.ps1))) `
+  -DashboardUrl https://status.example.com -Version vX.Y.Z -Sha256 'windows-amd64=HASH','windows-arm64=HASH'
 ```
 
-It runs as its own virtual account, `NT SERVICE\telltale-agent`, the only
-account (besides SYSTEM and Administrators) that can read the config. Its
-logs are in the Event Viewer. It refuses to install an exe outside Program
-Files, where other users might replace it.
+It puts the Agent in `C:\Program Files\Telltale\` and the config in
+`C:\ProgramData\Telltale\agent.toml`, and registers a service that runs as its
+own virtual account, `NT SERVICE\telltale-agent`, the only account (besides
+SYSTEM and Administrators) that can read the config. Its logs are in the
+Event Viewer.
 
-**macOS** — put `telltale-agent` in `/usr/local/bin/`, save the config as
-`/etc/telltale/agent.toml`, then:
+To upgrade, run the installer again with just `--version` (`-Version`) or
+`--binary` (`-Binary`); it keeps the config. To remove everything:
+`sudo sh install.sh uninstall`, or `install.ps1 uninstall`.
 
-```sh
-sudo telltale-agent service install
-```
-
-It runs as a hidden `_telltale-agent` user and logs to
-`/var/log/telltale-agent.log`. Uninstall with `service uninstall`
-(add `--purge` to delete the config too). It refuses to install an Agent or
-config that anyone but root (or you) could replace.
+**By hand on macOS or Windows** — put the Agent in `/usr/local/bin/` or
+`C:\Program Files\Telltale\`, save the config as above, and run
+`telltale-agent service install` (with `sudo`, or as Administrator).
+`service uninstall [--purge]` removes it. It refuses to install an Agent or
+config that others could replace.
 
 The installers never touch your motd, shell profiles, `authorized_keys`,
 crontab, sysctl, firewall, DNS or package sources.

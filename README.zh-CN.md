@@ -62,9 +62,9 @@ cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
 sha256sum --ignore-missing -c SHA256SUMS   # macOS：shasum -a 256 --ignore-missing -c SHA256SUMS
 ```
 
-装有 `cosign` 时，`install.sh --version` 会自己完成上面两项校验。没有 `cosign` 时，
-安装程序会拒绝下载，除非你用 `--sha256` 给出二进制文件的校验和——取自你在另一台机器上
-按上面方法验证过的 `SHA256SUMS`。
+装有 `cosign` 时，`install.sh --version` 和 `install.ps1 -Version` 会自己完成上面两项校验。
+没有 `cosign` 时，它们会拒绝下载，除非你用 `--sha256`（`-Sha256`）给出二进制文件的校验和；
+Dashboard 显示的安装命令会自动带上与它同版本发布的 Agent 的哈希值。
 
 ### 1. Dashboard（Linux）
 
@@ -89,44 +89,46 @@ Dashboard 监听 `127.0.0.1:8080` 和 `[::1]:8080`。请在前面放一个反向
 ### 2. 添加主机
 
 登录后打开 **管理后台**，点击 **添加主机**（名称留空则使用机器的 hostname）。
-页面会显示主机令牌、现成的 Linux 安装命令和 Agent 配置，**只显示这一次**，
-Dashboard 只保存令牌的哈希值。之后可以重新生成令牌，旧令牌会立即失效。
+页面会显示主机令牌（**只显示这一次**）、适用于 Linux、macOS 或 Windows 的一行安装命令，
+以及 Agent 配置；Dashboard 只保存令牌的哈希值。之后可以重新生成令牌，旧令牌会立即失效。
 
 ### 3. Agent
 
-**Linux** —— 请先阅读 [`deploy/install.sh`](deploy/install.sh)：它很短，
-并写明了会动哪些文件。
+Dashboard 给出的命令与下面的类似。它取自 Dashboard 自己的发布标签，会询问 Host 令牌
+（因此令牌不会留在 shell 历史里），并用与该 Dashboard 同版本发布的 Agent 的哈希值校验下载。
+运行前请先阅读安装脚本：它很短，并列出了会动的每一个文件。
+
+**Linux 和 macOS** —— [`deploy/install.sh`](deploy/install.sh)：
 
 ```sh
-sudo sh install.sh install --dashboard-url https://status.example.com --version vX.Y.Z
-# 它会询问 Host 令牌；也可以用 --token-file FILE（- 表示标准输入）
-# 没有 cosign 时加 --sha256 HASH；使用你手上已有的二进制文件：--binary ./telltale-agent
+curl -fsSLO https://raw.githubusercontent.com/Doublefire-Chen/Telltale/vX.Y.Z/deploy/install.sh
+sudo sh install.sh install --dashboard-url https://status.example.com --version vX.Y.Z \
+  --sha256 linux-amd64=HASH --sha256 linux-arm64=HASH   # Mac 上为 darwin-…；装有 cosign 时可省略
+# 用 --token-file FILE（- 表示标准输入）代替提示输入；用 --binary ./telltale-agent 安装你手上已有的二进制文件
 ```
 
-它会创建无特权的 `telltale-agent` 用户，写入归 root 所有、只有该用户所在组能读取的配置文件，
-并启动一个加固过的 systemd 服务。它自己从不运行新的二进制文件。升级时只带 `--version`
-或 `--binary` 再运行一次即可。完全卸载：`sudo sh install.sh uninstall`。
+在 Linux 上，它会创建无特权的 `telltale-agent` 用户，写入归 root 所有、只有该用户所在组能读取的配置文件，
+并启动一个加固过的 systemd 服务；它自己从不运行新的二进制文件。在 macOS 上，它交给
+`telltale-agent service install`，由 launchd 以隐藏的 `_telltale-agent` 用户运行 Agent，
+日志写入 `/var/log/telltale-agent.log`。
 
-**Windows**（以管理员身份）—— 把 `telltale-agent.exe` 放到 `C:\Program Files\Telltale\`，
-把配置保存为 `C:\ProgramData\Telltale\agent.toml`，然后：
+**Windows** —— [`deploy/install.ps1`](deploy/install.ps1)，以管理员身份在 PowerShell 中运行：
 
 ```powershell
-& "C:\Program Files\Telltale\telltale-agent.exe" service install
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Doublefire-Chen/Telltale/vX.Y.Z/deploy/install.ps1))) `
+  -DashboardUrl https://status.example.com -Version vX.Y.Z -Sha256 'windows-amd64=HASH','windows-arm64=HASH'
 ```
 
-它以自己的虚拟账户 `NT SERVICE\telltale-agent` 运行，除 SYSTEM 和 Administrators 外只有它能读取配置文件。日志在事件查看器中。如果 exe 不在 Program Files 下
-（其他用户可能替换它），它会拒绝安装。
+它把 Agent 放到 `C:\Program Files\Telltale\`，把配置写入 `C:\ProgramData\Telltale\agent.toml`，
+并注册一个以自己的虚拟账户 `NT SERVICE\telltale-agent` 运行的服务；除 SYSTEM 和 Administrators 外
+只有它能读取配置文件。日志在事件查看器中。
 
-**macOS** —— 把 `telltale-agent` 放到 `/usr/local/bin/`，把配置保存为
-`/etc/telltale/agent.toml`，然后：
+升级时只带 `--version`（`-Version`）或 `--binary`（`-Binary`）再运行一次安装脚本即可，配置会保留。
+完全卸载：`sudo sh install.sh uninstall`，或 `install.ps1 uninstall`。
 
-```sh
-sudo telltale-agent service install
-```
-
-它以隐藏的 `_telltale-agent` 用户运行，日志写入 `/var/log/telltale-agent.log`。
-用 `service uninstall` 卸载（加 `--purge` 会同时删除配置文件）。如果 root（或你）以外的人
-能替换 Agent 或配置文件，它会拒绝安装。
+**在 macOS 或 Windows 上手动安装** —— 把 Agent 放到 `/usr/local/bin/` 或 `C:\Program Files\Telltale\`，
+按上面的路径保存配置，然后运行 `telltale-agent service install`（用 `sudo`，或以管理员身份）。
+`service uninstall [--purge]` 可将其卸载。如果别人能替换 Agent 或配置文件，它会拒绝安装。
 
 安装程序永远不会修改你的 motd、shell 配置文件、`authorized_keys`、crontab、sysctl、
 防火墙、DNS 或软件源。
