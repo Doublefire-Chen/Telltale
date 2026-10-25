@@ -68,7 +68,19 @@ function Get-Asset {
 	}
 }
 
-function Get-Sha256([string]$Path) { (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant() }
+# Get-Sha256 hashes with .NET rather than Get-FileHash, which Windows
+# PowerShell cannot load when started from PowerShell 7 (its module path is
+# inherited).
+function Get-Sha256([string]$Path) {
+	$sha = [Security.Cryptography.SHA256]::Create()
+	$file = [IO.File]::OpenRead($Path)
+	try {
+		return (-join ($sha.ComputeHash($file) | ForEach-Object { $_.ToString('x2') }))
+	} finally {
+		$file.Dispose()
+		$sha.Dispose()
+	}
+}
 
 # Select-Sha256 returns the hash for Asset among the -Sha256 values: the one
 # given as os-arch=HASH for its platform, or a bare HASH.
