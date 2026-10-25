@@ -99,7 +99,7 @@ both of a Host's addresses. An IPv4-only Dashboard only ever shows IPv4.
 
 Log in, open the **Admin panel** and click **Add Host** (leave the name blank
 to use the machine's hostname). It shows the Host token, **only once**, with
-a one-line install command for Linux, macOS or Windows and the Agent config;
+a one-line install command for Linux, macOS or Windows that asks for it;
 the Dashboard keeps just the token's hash. You can regenerate the token
 later, which immediately revokes the old one.
 
