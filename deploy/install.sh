@@ -1,15 +1,15 @@
 #!/bin/sh
-# Telltale Agent installer for Linux.
+# Telltale Agent installer for Linux and macOS (Windows: install.ps1).
 #
-#   install.sh install   --dashboard-url URL (--binary PATH | --version vX.Y.Z [--sha256 HASH]) [--interval 2s] [--token-file FILE]
-#   install.sh install   (--binary PATH | --version vX.Y.Z [--sha256 HASH])   # upgrade: keeps the existing config
+#   install.sh install   --dashboard-url URL (--binary PATH | --version vX.Y.Z [--sha256 HASH]...) [--interval 2s] [--token-file FILE]
+#   install.sh install   (--binary PATH | --version vX.Y.Z [--sha256 HASH]...)   # upgrade: keeps the existing config
 #   install.sh uninstall
 #
 # On a first install it asks for the Host token (or reads it from --token-file,
 # "-" for stdin), so the token never appears in the process list or your shell
 # history. --version checks the download's cosign signature, which needs
-# cosign; without cosign, pass --sha256 with the binary's checksum from a
-# SHA256SUMS you verified elsewhere.
+# cosign; without cosign, pass --sha256 with the binary's checksum, as HASH or
+# as os-arch=HASH (once per platform; the Dashboard's command does this).
 #
 # Read it before you run it. It touches only these paths, and uninstall removes
 # all of them:
@@ -17,8 +17,11 @@
 #   /usr/local/bin/telltale-agent                   the Agent
 #   /etc/telltale/agent.toml                        its config (root-owned, readable by the Agent's group)
 #   /etc/telltale/                                  removed on uninstall if empty
-#   /etc/systemd/system/telltale-agent.service      its systemd unit
-#   the telltale-agent system user and group        no shell, no home
+#   Linux: /etc/systemd/system/telltale-agent.service, and the telltale-agent
+#   system user and group (no shell, no home)
+#   macOS: what `telltale-agent service install` sets up: the launchd daemon
+#   in /Library/LaunchDaemons, /var/log/telltale-agent.log and the hidden
+#   _telltale-agent user
 #
 # It never touches the motd, shell profiles, authorized_keys, crontab, sysctl,
 # the firewall, DNS or package sources (ADR 0001).
@@ -34,8 +37,14 @@ UNIT="/etc/systemd/system/telltale-agent.service"
 say() { printf '%s\n' "$*"; }
 die() { printf 'telltale install: %s\n' "$*" >&2; exit 1; }
 
+case "$(uname -s)" in
+	Linux) OS=linux ROOT_GROUP=root ;;
+	Darwin) OS=darwin ROOT_GROUP=wheel USER_NAME="_telltale-agent" ;;
+	*) die "this installer is for Linux and macOS; on Windows use install.ps1" ;;
+esac
+
 usage() {
-	sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
 	exit 2
 }
 
@@ -96,6 +105,11 @@ UNIT
 }
 
 arch() {
+	# A shell under Rosetta reports x86_64 on Apple silicon.
+	if [ "$OS" = darwin ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = 1 ]; then
+		echo arm64
+		return
+	fi
 	case "$(uname -m)" in
 		x86_64 | amd64) echo amd64 ;;
 		aarch64 | arm64) echo arm64 ;;
@@ -106,27 +120,48 @@ arch() {
 # matches VALUE REGEX succeeds if all of VALUE matches the extended REGEX.
 matches() { printf '%s' "$1" | grep -Eqx "$2" && [ "$(printf '%s' "$1" | wc -l)" -eq 0 ]; }
 
-# can_fetch VERSION SHA256 fails early if fetch could not check the download.
+# asset prints the name of this machine's Agent binary in a release.
+asset() { printf 'telltale-agent-%s-%s' "$OS" "$(arch)"; }
+
+# sha256_of FILE prints FILE's SHA-256 (older Macs have only shasum).
+sha256_of() {
+	if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d ' ' -f 1
+}
+
+# pick_sha256 ASSET HASHES prints the hash for ASSET among the --sha256
+# values: the one given as os-arch=HASH for its platform, or a bare HASH.
+pick_sha256() {
+	for h in $2; do
+		case "$h" in
+			*=*) [ "telltale-agent-${h%%=*}" != "$1" ] || { printf '%s' "${h#*=}"; return; } ;;
+			*) printf '%s' "$h"; return ;;
+		esac
+	done
+}
+
+# can_fetch VERSION SHA256S fails early if fetch could not check the download.
 can_fetch() {
 	command -v curl >/dev/null 2>&1 || die "curl is needed to download a release; or use --binary"
-	if [ -z "$2" ] && ! command -v cosign >/dev/null 2>&1; then
+	if [ -n "$2" ]; then
+		[ -n "$(pick_sha256 "$(asset)" "$2")" ] || die "no --sha256 given for $(asset)"
+	elif ! command -v cosign >/dev/null 2>&1; then
 		die "cosign is needed to check who published $1 (https://docs.sigstore.dev/cosign/system_config/installation/);
-or pass --sha256 with the checksum of telltale-agent-linux-$(arch) from a SHA256SUMS you verified with cosign elsewhere"
+or pass --sha256 with the checksum of $(asset) from a SHA256SUMS you verified with cosign elsewhere"
 	fi
 }
 
-# fetch VERSION SHA256 DEST downloads a release binary and checks it: against
-# SHA256 if given, otherwise against the release's SHA256SUMS after checking
+# fetch VERSION SHA256S DEST downloads a release binary and checks it: against
+# its hash among SHA256S if given, otherwise against the release's SHA256SUMS after checking
 # that file's cosign signature, which proves this repository's release
 # workflow made it at that tag. A SHA256SUMS that is only checksummed would
 # prove nothing, since whoever could replace the binary could replace it too.
 fetch() {
-	asset="telltale-agent-linux-$(arch)"
+	asset=$(asset)
 	base="https://github.com/$REPO/releases/download/$1"
 	tmp=$(mktemp -d)
 	curl -fsSL "$base/$asset" -o "$tmp/$asset" || die "could not download $base/$asset"
 	if [ -n "$2" ]; then
-		printf '%s  %s\n' "$2" "$asset" > "$tmp/SHA256SUMS"
+		printf '%s  %s\n' "$(pick_sha256 "$asset" "$2")" "$asset" > "$tmp/SHA256SUMS"
 	else
 		curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" || die "could not download $base/SHA256SUMS"
 		curl -fsSL "$base/SHA256SUMS.sigstore.json" -o "$tmp/SHA256SUMS.sigstore.json" ||
@@ -141,7 +176,7 @@ fetch() {
 	# implementations check nothing and still succeed.
 	want=$(awk -v f="$asset" '$2 == f { print $1 }' "$tmp/SHA256SUMS")
 	matches "$want" '[0-9a-f]{64}' || die "SHA256SUMS has no single checksum for $asset"
-	got=$(sha256sum "$tmp/$asset" | cut -d ' ' -f 1)
+	got=$(sha256_of "$tmp/$asset")
 	[ "$got" = "$want" ] || die "checksum mismatch for $asset"
 	cp "$tmp/$asset" "$3"
 	rm -rf "$tmp"
@@ -187,14 +222,16 @@ install_agent() {
 			--token-file) token_file="${2:?}"; shift 2 ;;
 			--binary) binary="${2:?}"; shift 2 ;;
 			--version) version="${2:?}"; shift 2 ;;
-			--sha256) sha256="${2:?}"; shift 2 ;;
+			--sha256) sha256="$sha256 ${2:?}"; shift 2 ;;
 			--interval) interval="${2:?}"; shift 2 ;;
 			*) usage ;;
 		esac
 	done
 	[ -n "$binary" ] || [ -n "$version" ] || die "give --binary PATH or --version vX.Y.Z"
 	[ -z "$version" ] || matches "$version" 'v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' || die "--version must look like v1.2.3"
-	[ -z "$sha256" ] || matches "$sha256" '[0-9a-f]{64}' || die "--sha256 must be 64 lowercase hex digits"
+	for h in $sha256; do
+		matches "$h" '([a-z]+-[a-z0-9]+=)?[0-9a-f]{64}' || die "--sha256 must be 64 lowercase hex digits, or os-arch= and those"
+	done
 	if [ -n "$interval" ]; then
 		matches "$interval" '[0-9]+(\.[0-9]+)?(ms|s|m|h)' || die "--interval must be a duration such as 2s"
 		# The Agent refuses to start below one second.
@@ -219,7 +256,7 @@ install_agent() {
 	[ -f "$CONFIG" ] || [ -n "$url" ] || die "first install needs --dashboard-url"
 	[ -n "$binary" ] || can_fetch "$version" "$sha256"
 
-	create_user
+	[ "$OS" = darwin ] || create_user
 
 	tmp_bin=$(mktemp)
 	if [ -n "$binary" ]; then
@@ -227,13 +264,13 @@ install_agent() {
 	else
 		fetch "$version" "$sha256" "$tmp_bin"
 	fi
-	install -m 0755 "$tmp_bin" "$BIN"
+	mkdir -p "$(dirname "$BIN")"
+	install -o root -g "$ROOT_GROUP" -m 0755 "$tmp_bin" "$BIN"
 	rm -f "$tmp_bin"
-	# Not running the new binary here: it would run as root, unconfined.
-	say "installed $BIN (${version:-from $binary}, sha256 $(sha256sum "$BIN" | cut -d ' ' -f 1))"
+	say "installed $BIN (${version:-from $binary}, sha256 $(sha256_of "$BIN"))"
 
 	mkdir -p "$CONFIG_DIR"
-	chown root:root "$CONFIG_DIR"
+	chown "root:$ROOT_GROUP" "$CONFIG_DIR"
 	chmod 0755 "$CONFIG_DIR"
 	if [ -n "$url" ]; then
 		old_umask=$(umask)
@@ -248,6 +285,16 @@ install_agent() {
 	else
 		say "kept existing $CONFIG"
 	fi
+	if [ "$OS" = darwin ]; then
+		# The Agent sets up its own launchd daemon and user, and gives the
+		# config to that user's group. That needs root, so unlike on Linux the
+		# new binary runs as root here, once; it was checked above.
+		chown root:wheel "$CONFIG"
+		chmod 0600 "$CONFIG"
+		"$BIN" -config "$CONFIG" service install
+		return
+	fi
+	# Not running the new binary here: it would run as root, unconfined.
 	# Root owns the config so the Agent can read its token but not change
 	# where it reports to.
 	chown "root:$USER_NAME" "$CONFIG"
@@ -268,6 +315,19 @@ install_agent() {
 }
 
 uninstall_agent() {
+	if [ "$OS" = darwin ]; then
+		# The Agent removes its daemon, log, config and user.
+		[ ! -x "$BIN" ] || "$BIN" -config "$CONFIG" service uninstall --purge
+		if [ -e "$BIN" ]; then
+			rm -f "$BIN"
+			say "removed $BIN"
+		fi
+		if [ -d "$CONFIG_DIR" ] && [ -z "$(ls -A "$CONFIG_DIR")" ]; then
+			rmdir "$CONFIG_DIR"
+			say "removed $CONFIG_DIR"
+		fi
+		return
+	fi
 	if has_systemd && [ -f "$UNIT" ]; then
 		systemctl disable --now telltale-agent.service >/dev/null 2>&1 || true
 	fi

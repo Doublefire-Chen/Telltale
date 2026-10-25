@@ -50,6 +50,20 @@ jobs:
       # interval goes over budget (see internal/e2e/budget_test.go).
       - run: go test -tags budget -v ./internal/e2e -run TestAgentBudget
 
+  installer:
+    name: Installer and systemd units (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      # Installs, checks and uninstalls the Agent with deploy/install.sh in a
+      # Debian container running real systemd.
+      - run: ./scripts/test-install-in-container.sh
+
   agent:
     name: Agent (${{ matrix.os }})
     strategy:
@@ -66,8 +80,9 @@ jobs:
           go-version-file: go.mod
       - name: Agent and protocol tests (includes the collector smoke test)
         run: go test ./internal/agent/... ./internal/protocol/... ./cmd/telltale-agent/...
-      # Installs the Agent as a real system service, checks it reports to a
-      # Dashboard as its own unprivileged account, then uninstalls it.
+      # Installs the Agent as a real system service, directly and through
+      # deploy/install.sh or install.ps1, checks it reports to a Dashboard as
+      # its own unprivileged account, then uninstalls it.
       - name: Service install test (Windows)
         if: runner.os == 'Windows'
         run: go test -tags servicetest -v -run TestService ./internal/e2e
