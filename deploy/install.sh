@@ -240,9 +240,13 @@ read_token() {
 	fi
 	[ -r /dev/tty ] || die "no terminal to ask for the Host token on; use --token-file FILE (or - for stdin)"
 	printf 'Host token (input hidden): ' > /dev/tty
-	stty -echo < /dev/tty
-	IFS= read -r t < /dev/tty || t=""
-	stty echo < /dev/tty
+	if command -v stty >/dev/null 2>&1; then
+		stty -echo < /dev/tty
+		IFS= read -r t < /dev/tty || t=""
+		stty echo < /dev/tty
+	else # OpenWrt has no stty, but its BusyBox shell reads silently with -s
+		IFS= read -rs t < /dev/tty 2>/dev/null || t=""
+	fi
 	printf '\n' > /dev/tty
 	printf '%s' "$t"
 }
