@@ -241,5 +241,9 @@ function Uninstall-Agent {
 	}
 }
 
+# PowerShell 7 runs on Linux and macOS too, where install.sh is the installer.
+if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) {
+	Die 'this installer is for Windows; on Linux and macOS copy the install.sh command from the Dashboard'
+}
 Assert-Administrator
 if ($Action -eq 'install') { Install-Agent } else { Uninstall-Agent }

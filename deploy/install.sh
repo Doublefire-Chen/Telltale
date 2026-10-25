@@ -139,11 +139,33 @@ pick_sha256() {
 	done
 }
 
+# os_name OS prints OS as the Dashboard's install dialog names it.
+os_name() {
+	case "$1" in
+		linux) echo Linux ;;
+		darwin) echo macOS ;;
+		windows) echo Windows ;;
+		*) echo "$1" ;;
+	esac
+}
+
+# wrong_os HASHES fails with a hint if the --sha256 values pin another OS's
+# Agents, as when the Dashboard's command for that OS was copied by mistake.
+wrong_os() {
+	for h in $1; do
+		case "$h" in
+			"$OS"-*=*) ;;
+			*-*=*) die "this command is for $(os_name "${h%%-*}"), but this machine runs $(os_name "$OS"): copy the $(os_name "$OS") install command from the Dashboard" ;;
+		esac
+	done
+	return 1
+}
+
 # can_fetch VERSION SHA256S fails early if fetch could not check the download.
 can_fetch() {
 	command -v curl >/dev/null 2>&1 || die "curl is needed to download a release; or use --binary"
 	if [ -n "$2" ]; then
-		[ -n "$(pick_sha256 "$(asset)" "$2")" ] || die "no --sha256 given for $(asset)"
+		[ -n "$(pick_sha256 "$(asset)" "$2")" ] || wrong_os "$2" || die "no --sha256 given for $(asset)"
 	elif ! command -v cosign >/dev/null 2>&1; then
 		die "cosign is needed to check who published $1 (https://docs.sigstore.dev/cosign/system_config/installation/);
 or pass --sha256 with the checksum of $(asset) from a SHA256SUMS you verified with cosign elsewhere"
