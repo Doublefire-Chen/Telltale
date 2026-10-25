@@ -31,14 +31,15 @@ for _ in $(seq 30); do
 done
 run_in 'ubus call service list >/dev/null' || fail "procd did not come up"
 
-docker cp "$WORK/telltale-agent" "$NAME:/tmp/telltale-agent"
-docker cp "$WORK/telltale-dashboard" "$NAME:/tmp/telltale-dashboard"
-docker cp deploy/install.sh "$NAME:/tmp/install.sh"
+# Not into /tmp: procd mounts a tmpfs over it, hiding what docker cp puts there.
+docker cp "$WORK/telltale-agent" "$NAME:/root/telltale-agent"
+docker cp "$WORK/telltale-dashboard" "$NAME:/root/telltale-dashboard"
+docker cp deploy/install.sh "$NAME:/root/install.sh"
 
 echo "starting a Dashboard in the container"
 run_in 'mkdir -p /tmp/dash && printf "listen = [\"0.0.0.0:8080\"]\ndata_dir = \"/tmp/dash\"\n" > /tmp/dash.toml
-	printf "openwrt test pw\nopenwrt test pw\n" | /tmp/telltale-dashboard -config /tmp/dash.toml admin set-password >/dev/null'
-docker exec -d "$NAME" /tmp/telltale-dashboard -config /tmp/dash.toml
+	printf "openwrt test pw\nopenwrt test pw\n" | /root/telltale-dashboard -config /tmp/dash.toml admin set-password >/dev/null'
+docker exec -d "$NAME" /root/telltale-dashboard -config /tmp/dash.toml
 for _ in $(seq 20); do curl -fs -o /dev/null "http://127.0.0.1:$PORT/" && break; sleep 0.5; done
 curl -fs -c "$WORK/jar" -o /dev/null -X POST -H 'Content-Type: application/json' \
 	-d '{"username":"admin","password":"openwrt test pw"}' "http://127.0.0.1:$PORT/api/session" || fail "cannot log in to the Dashboard"
@@ -46,7 +47,7 @@ TOKEN=$(curl -fs -b "$WORK/jar" -X POST -H 'Content-Type: application/json' -d '
 	sed 's/.*"token":"\([^"]*\)".*/\1/')
 
 echo "installing the Agent"
-run_in "printf %s $TOKEN | sh /tmp/install.sh install --dashboard-url http://127.0.0.1:8080 --token-file - --binary /tmp/telltale-agent --interval 1s"
+run_in "printf %s $TOKEN | sh /root/install.sh install --dashboard-url http://127.0.0.1:8080 --token-file - --binary /root/telltale-agent --interval 1s"
 run_in 'grep -q "^telltale-agent:x:[0-9]*:[0-9]*:telltale-agent:/nonexistent:/bin/false$" /etc/passwd' || fail "telltale-agent is not a no-shell user"
 gid=$(run_in 'grep "^telltale-agent:" /etc/passwd | cut -d: -f4')
 run_in "grep -q '^telltale-agent:x:$gid:' /etc/group" || fail "telltale-agent has no group of its own"
@@ -70,14 +71,14 @@ sleep 7
 run_in 'pidof telltale-agent >/dev/null' || fail "procd did not restart the Agent"
 ok "procd restarts the Agent"
 
-OUT=$(run_in 'sh /tmp/install.sh install --binary /tmp/telltale-agent')
+OUT=$(run_in 'sh /root/install.sh install --binary /root/telltale-agent')
 printf '%s' "$OUT" | grep -q "kept existing /etc/telltale/agent.toml" || fail "upgrade did not keep the config"
 sleep 2
 run_in 'pidof telltale-agent >/dev/null' || fail "the Agent is not running after the upgrade"
 ok "upgrade keeps the config and restarts the Agent"
 
 echo "uninstalling"
-OUT=$(run_in 'sh /tmp/install.sh uninstall')
+OUT=$(run_in 'sh /root/install.sh uninstall')
 printf '%s\n' "$OUT"
 for item in /etc/init.d/telltale-agent /usr/local/bin/telltale-agent /etc/telltale/agent.toml "user telltale-agent"; do
 	printf '%s' "$OUT" | grep -q "removed $item" || fail "uninstall did not report removing $item"
