@@ -50,6 +50,8 @@ export type HostInfo = {
   /** Unix seconds. */
   boot_time?: number
   agent_version?: string
+  /** Fingerprint of the Agent's code; unchanged across releases that left its platform alone. */
+  agent_build?: string
 }
 
 export type Host = {
@@ -60,6 +62,7 @@ export type Host = {
   report: Report | null
   /** False once the Host missed three intervals (Offline), or before its first Report. */
   online: boolean
+  /** The Dashboard's release has a different Agent for this Host's platform (or, lacking fingerprints, a newer version). */
   agent_outdated: boolean
   /** ISO country codes to show as flags (override, else IPv4/IPv6 countries). */
   countries: string[]

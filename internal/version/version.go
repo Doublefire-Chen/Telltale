@@ -19,6 +19,18 @@ var Version = "dev"
 // without the Host needing cosign. Empty for other builds.
 var AgentSHA256 = ""
 
+// Build is this Agent's fingerprint: the SHA-256 of the same Agent built with
+// a placeholder version and no VCS stamp, so it changes only when the code
+// compiled for its platform changes, not with every release. The release
+// build sets it on each Agent. Empty for other builds.
+var Build = ""
+
+// AgentBuilds lists the fingerprints (see Build) of the Agents released with
+// this build, in the form of AgentSHA256. The release build sets it on the
+// Dashboard, which treats an Agent whose fingerprint is listed as current even
+// when its release version is older. Empty for other builds.
+var AgentBuilds = ""
+
 // AgentHashes parses AgentSHA256 into a map from "os-arch" to hash, leaving
 // out anything malformed.
 func AgentHashes(list string) map[string]string {

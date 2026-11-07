@@ -36,7 +36,7 @@ A Host left out of the public Status page but still visible in the Admin area.
 ## Data
 
 **Host Info**:
-The static description of a Host (OS, kernel, architecture, CPU model, totals, virtualization, boot time, Agent version), sent at Agent start, on change, and periodically — once over each IP family.
+The static description of a Host (OS, kernel, architecture, CPU model, totals, virtualization, boot time, Agent version and Agent build), sent at Agent start, on change, and periodically — once over each IP family.
 _Avoid_: basic info, system info
 
 **Report**:
@@ -57,6 +57,10 @@ Time since a Host's boot, derived by the Dashboard from the boot time in Host In
 **Offline**:
 The condition of a Host from which no Report has arrived within three report intervals.
 _Avoid_: down, disconnected, dead
+
+**Agent build**:
+A fingerprint of an Agent's code for its platform: it stays the same across releases that did not change that platform's Agent, while the release version moves on with every release. An Agent is **outdated** when its Agent build is not one released with the Dashboard (or, for Agents without one, when its release version is older).
+_Avoid_: build number, commit
 
 **Protocol version**:
 The version of the Agent-to-Dashboard wire format, independent of Telltale's release version.

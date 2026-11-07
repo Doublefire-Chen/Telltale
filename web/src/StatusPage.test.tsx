@@ -220,7 +220,7 @@ describe('Status page', () => {
     expect(screen.getByRole('article', { name: /Unnamed Host/ })).toBeTruthy()
   })
 
-  it('flags Hosts whose Agent is older than the Dashboard', async () => {
+  it('flags Hosts whose Agent the Dashboard says is outdated', async () => {
     stubDashboard({
       authenticated: true,
       hosts: [
@@ -232,7 +232,7 @@ describe('Status page', () => {
     await screen.findByRole('article', { name: /old/ })
 
     const badge = within(card('old')).getByText('Agent outdated')
-    expect(badge.getAttribute('title')).toBe('Agent v1.1.0 is older than Dashboard v1.2.0. Upgrade it on the Host.')
+    expect(badge.getAttribute('title')).toBe('Dashboard v1.2.0 comes with a newer Agent for this Host than v1.1.0. Upgrade it on the Host.')
     expect(within(card('current')).queryByText('Agent outdated')).toBeNull()
   })
 

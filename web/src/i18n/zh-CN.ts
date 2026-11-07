@@ -41,7 +41,7 @@ export const zhCN: Translation = {
     uptime: '运行时间',
     unnamed: '未命名主机',
     outdated: 'Agent 版本过旧',
-    outdatedDetail: 'Agent {{agent}} 旧于 Dashboard {{dashboard}}，请在该主机上升级。',
+    outdatedDetail: 'Dashboard {{dashboard}} 附带了比 {{agent}} 更新的 Agent，请在该主机上升级。',
     uptimeDays: '{{d}}天{{h}}小时',
     uptimeHours: '{{h}}小时{{m}}分',
     uptimeMinutes: '{{m}}分钟',

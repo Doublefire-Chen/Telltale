@@ -135,12 +135,13 @@ func TestSendsReportsOverHTTP2WithBearerToken(t *testing.T) {
 	defer srv.Close()
 
 	s := newSender(srv.URL+"/", testToken, 20*time.Millisecond, "v1.2.3", &fakeCollector{}, nil, srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs)
+	s.build = "fingerprint"
 	reqs := runUntil(t, s, d, func(reqs []received) bool {
 		return len(onPath(reqs, v1.ReportPath)) >= 3 && len(onPath(reqs, v1.HostInfoPath)) > 0
 	})
 
-	if info := onPath(reqs, v1.HostInfoPath)[0].hostInfo; info.Hostname != "fake-host" || info.AgentVersion != "v1.2.3" {
-		t.Fatalf("Host Info %+v, want Host Info with the Agent version", info)
+	if info := onPath(reqs, v1.HostInfoPath)[0].hostInfo; info.Hostname != "fake-host" || info.AgentVersion != "v1.2.3" || info.AgentBuild != "fingerprint" {
+		t.Fatalf("Host Info %+v, want Host Info with the Agent version and fingerprint", info)
 	}
 	for _, r := range reqs {
 		if r.method != http.MethodPost || (r.path != v1.ReportPath && r.path != v1.HostInfoPath) {

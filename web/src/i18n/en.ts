@@ -40,7 +40,7 @@ export const en = {
     uptime: 'Uptime',
     unnamed: 'Unnamed Host',
     outdated: 'Agent outdated',
-    outdatedDetail: 'Agent {{agent}} is older than Dashboard {{dashboard}}. Upgrade it on the Host.',
+    outdatedDetail: 'Dashboard {{dashboard}} comes with a newer Agent for this Host than {{agent}}. Upgrade it on the Host.',
     uptimeDays: '{{d}}d {{h}}h',
     uptimeHours: '{{h}}h {{m}}m',
     uptimeMinutes: '{{m}}m',

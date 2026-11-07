@@ -14,6 +14,7 @@ import (
 	"time"
 
 	v1 "github.com/Doublefire-Chen/Telltale/internal/protocol/v1"
+	"github.com/Doublefire-Chen/Telltale/internal/version"
 )
 
 const (
@@ -37,7 +38,8 @@ type Sender struct {
 	hostInfoURL string
 	token       string
 	interval    time.Duration
-	version     string
+	version     string // release version
+	build       string // fingerprint, see version.Build
 	collector   Collector
 	logger      *slog.Logger
 	client      *http.Client
@@ -66,12 +68,13 @@ type infoChannel struct {
 	retryAt     time.Time
 }
 
-// NewSender builds a Sender for cfg. version is sent as the Agent's release version.
-func NewSender(cfg Config, collector Collector, version string, logger *slog.Logger) *Sender {
-	return newSender(cfg.DashboardURL, cfg.Token, cfg.Interval.Duration, version, collector, logger, nil)
+// NewSender builds a Sender for cfg. release is sent as the Agent's release
+// version, along with its fingerprint, version.Build.
+func NewSender(cfg Config, collector Collector, release string, logger *slog.Logger) *Sender {
+	return newSender(cfg.DashboardURL, cfg.Token, cfg.Interval.Duration, release, collector, logger, nil)
 }
 
-func newSender(dashboardURL, token string, interval time.Duration, version string, collector Collector, logger *slog.Logger, rootCAs *x509.CertPool) *Sender {
+func newSender(dashboardURL, token string, interval time.Duration, release string, collector Collector, logger *slog.Logger, rootCAs *x509.CertPool) *Sender {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
@@ -81,7 +84,8 @@ func newSender(dashboardURL, token string, interval time.Duration, version strin
 		hostInfoURL: base + v1.HostInfoPath,
 		token:       token,
 		interval:    interval,
-		version:     version,
+		version:     release,
+		build:       version.Build,
 		collector:   collector,
 		logger:      logger,
 		client:      newClient(rootCAs, "tcp"),
@@ -163,7 +167,7 @@ func (s *Sender) checkHostInfo(ctx context.Context) {
 	now := s.now()
 	s.infoCheckedAt = now
 	info := s.collector.HostInfo(ctx)
-	info.AgentVersion = s.version
+	info.AgentVersion, info.AgentBuild = s.version, s.build
 	body, err := json.Marshal(info)
 	if err != nil {
 		s.logger.Error("encode Host Info", "err", err)

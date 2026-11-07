@@ -30,6 +30,12 @@ Within v1 the format only grows.
    as unknown ("—"). Never make a new field required for a Report or Host
    Info to be accepted.
 4. **Never reject an Agent for being old.** Flag it as outdated instead.
+   Outdated means the Dashboard's release carries a different Agent for the
+   Host's platform: Agents send their Agent build (`agent_build`), a hash of
+   the Agent built with a placeholder version, which `scripts/build-release.sh`
+   computes. A release that only changes the macOS Agent leaves Linux and
+   Windows Hosts current. Agents without an Agent build are compared by
+   release version.
 5. **Record every field in the golden corpus.** `internal/protocol/v1/golden`
    holds what each released Agent sends. Tests fail if a recorded payload no
    longer decodes strictly (something was renamed or removed), if the

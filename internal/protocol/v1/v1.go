@@ -85,4 +85,8 @@ type HostInfo struct {
 	BootTime *int64 `json:"boot_time,omitempty"`
 	// AgentVersion is the Agent's release version.
 	AgentVersion string `json:"agent_version,omitempty"`
+	// AgentBuild is the Agent's fingerprint: a hash that changes only when
+	// the code built for its platform does, unlike AgentVersion, which every
+	// release bumps. Empty for unreleased builds.
+	AgentBuild string `json:"agent_build,omitempty"`
 }

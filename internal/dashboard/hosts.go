@@ -34,7 +34,8 @@ type hostView struct {
 	// Online is set while the Host keeps reporting; false once it has
 	// missed three intervals (Offline) or before its first Report.
 	Online bool `json:"online"`
-	// AgentOutdated is set when the Host's Agent is older than this Dashboard.
+	// AgentOutdated is set when the Host's Agent should be upgraded: see
+	// agentOutdated.
 	AgentOutdated bool `json:"agent_outdated"`
 	// Countries are the ISO codes to show as flags: the manual override if
 	// set, else the distinct countries of the Host's IPv4 and IPv6 addresses.
@@ -93,7 +94,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			var info v1.HostInfo
 			if err := json.Unmarshal(h.HostInfo, &info); err == nil {
 				v.HostInfo = &info
-				v.AgentOutdated = version.Older(info.AgentVersion, s.version)
+				v.AgentOutdated = s.agentOutdated(info)
 			}
 		}
 		if rep, ok := s.latest.get(h.ID); ok {
@@ -107,6 +108,27 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		resp.Hosts = append(resp.Hosts, v)
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// agentOutdated reports whether the Agent that sent info should be upgraded.
+// A release only changes some platforms' Agents, so when both sides know the
+// Agents' fingerprints, an Agent is current while its fingerprint matches one
+// released with this Dashboard, however old its release version. Agents
+// without a fingerprint (released before it existed, or dev builds) and
+// Dashboards without the list fall back to comparing release versions.
+func (s *Server) agentOutdated(info v1.HostInfo) bool {
+	if info.AgentBuild == "" || len(s.agentBuilds) == 0 {
+		return version.Older(info.AgentVersion, s.version)
+	}
+	if version.Older(s.version, info.AgentVersion) {
+		return false // newer than this Dashboard: nothing here to upgrade to
+	}
+	for _, build := range s.agentBuilds {
+		if build == info.AgentBuild {
+			return false
+		}
+	}
+	return true
 }
 
 type addHostRequest struct {

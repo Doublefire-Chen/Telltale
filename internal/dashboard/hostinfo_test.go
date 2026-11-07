@@ -151,3 +151,54 @@ func TestAgentOutdatedBadge(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentOutdatedByFingerprint(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	linux, darwin, oldDarwin := strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64)
+	clock := &fakeClock{now: time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)}
+	srv := httptest.NewServer(dashboard.New(dashboard.Options{
+		Store: st, Now: clock.Now, Version: "v1.1.0",
+		AgentBuilds: "linux-amd64=" + linux + ",darwin-arm64=" + darwin,
+	}))
+	defer srv.Close()
+	h := &harness{t: t, store: st, clock: clock, srv: srv}
+	h.setPassword(testPassword)
+	session := h.loginOK()
+
+	cases := []struct {
+		name, version, build string
+		outdated             bool
+	}{
+		// v1.1.0 changed only the macOS Agent: an older Linux Agent built
+		// from the same code is current, an older macOS one is not.
+		{"linux-unchanged", "v1.0.0", linux, false},
+		{"darwin-changed", "v1.0.0", oldDarwin, true},
+		{"darwin-current", "v1.1.0", darwin, false},
+		// Agents released before fingerprints are judged by version.
+		{"no-build-old", "v1.0.0", "", true},
+		{"no-build-same", "v1.1.0", "", false},
+		// An Agent newer than the Dashboard has nothing here to upgrade to.
+		{"newer", "v1.2.0", oldDarwin, false},
+	}
+	want := map[string]bool{}
+	for _, tc := range cases {
+		host := h.addHost(session, tc.name)
+		info := strings.Replace(sampleHostInfo, `"agent_version":"v1.0.0"`, `"agent_version":"`+tc.version+`","agent_build":"`+tc.build+`"`, 1)
+		expectStatus(t, h.postHostInfo("Bearer "+host.Token, info), http.StatusNoContent)
+		want[tc.name] = tc.outdated
+	}
+
+	_, hosts := h.hostsWithInfo(session)
+	if len(hosts) != len(cases) {
+		t.Fatalf("%d hosts, want %d", len(hosts), len(cases))
+	}
+	for _, host := range hosts {
+		if host.AgentOutdated != want[host.Name] {
+			t.Errorf("%s: agent_outdated = %v, want %v", host.Name, host.AgentOutdated, want[host.Name])
+		}
+	}
+}

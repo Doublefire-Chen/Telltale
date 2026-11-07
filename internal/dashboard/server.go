@@ -65,6 +65,9 @@ type Options struct {
 	// AgentSHA256 lists the hashes of the Agents released with it, in the
 	// form of version.AgentSHA256, which is the default.
 	AgentSHA256 string
+	// AgentBuilds lists the fingerprints of the Agents released with it, in
+	// the form of version.AgentBuilds, which is the default.
+	AgentBuilds string
 	// TrustedProxies are the reverse proxies whose forwarded-for headers are
 	// believed; nil means DefaultTrustedProxies.
 	TrustedProxies []netip.Prefix
@@ -90,6 +93,7 @@ type Server struct {
 	app            fs.FS
 	version        string
 	agentSHA256    map[string]string
+	agentBuilds    map[string]string
 	trustedProxies []netip.Prefix
 	geoip          *geoip.DB
 	now            func() time.Time
@@ -152,6 +156,7 @@ func New(opts Options) *Server {
 		s.version = version.Version
 	}
 	s.agentSHA256 = version.AgentHashes(cmp.Or(opts.AgentSHA256, version.AgentSHA256))
+	s.agentBuilds = version.AgentHashes(cmp.Or(opts.AgentBuilds, version.AgentBuilds))
 	s.trustedProxies = opts.TrustedProxies
 	if s.trustedProxies == nil {
 		s.trustedProxies = DefaultTrustedProxies
