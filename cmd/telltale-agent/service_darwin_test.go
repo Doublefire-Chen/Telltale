@@ -11,7 +11,8 @@ import (
 	"time"
 )
 
-// fakeDSCL answers dscl the way a Mac with users 0, 1, 300 and groups 0, 301 would.
+// fakeDSCL answers dscl the way a Mac with users 0, 1, 499 and groups 0, 498
+// and no _telltale-agent user would.
 func fakeDSCL(t *testing.T) *[]string {
 	t.Helper()
 	var calls []string
@@ -22,9 +23,9 @@ func fakeDSCL(t *testing.T) *[]string {
 		calls = append(calls, call)
 		switch call {
 		case "dscl . -list /Users UniqueID":
-			return "root  0\ndaemon 1\n_other 300\n", nil
+			return "root  0\ndaemon 1\n_other 499\n", nil
 		case "dscl . -list /Groups PrimaryGroupID":
-			return "wheel 0\n_othergroup 301\n", nil
+			return "wheel 0\n_othergroup 498\n", nil
 		case "dscl . -read /Users/_telltale-agent UniqueID PrimaryGroupID":
 			return "", fmt.Errorf("eDSRecordNotFound")
 		}
@@ -36,15 +37,15 @@ func fakeDSCL(t *testing.T) *[]string {
 func TestFreeIDSkipsUsersAndGroups(t *testing.T) {
 	fakeDSCL(t)
 	id, err := freeID()
-	if err != nil || id != 302 {
-		t.Fatalf("freeID = %d, %v; want 302 (300 is a user, 301 a group)", id, err)
+	if err != nil || id != 497 {
+		t.Fatalf("freeID = %d, %v; want 497 (the highest free: 499 is a user, 498 a group)", id, err)
 	}
 }
 
 func TestEnsureUserCreatesAHiddenShelllessAccount(t *testing.T) {
 	calls := fakeDSCL(t)
 	uid, gid, created, err := ensureUser()
-	if err != nil || !created || uid != 302 || gid != 302 {
+	if err != nil || !created || uid != 497 || gid != 497 {
 		t.Fatalf("ensureUser = %d, %d, %v, %v", uid, gid, created, err)
 	}
 	all := strings.Join(*calls, "\n")
@@ -53,7 +54,8 @@ func TestEnsureUserCreatesAHiddenShelllessAccount(t *testing.T) {
 		"dscl . -create /Users/_telltale-agent NFSHomeDirectory /var/empty",
 		"dscl . -create /Users/_telltale-agent IsHidden 1",
 		"dscl . -create /Users/_telltale-agent Password *",
-		"dscl . -create /Groups/_telltale-agent PrimaryGroupID 302",
+		"dscl . -create /Groups/_telltale-agent PrimaryGroupID 497",
+		"dscl . -create /Users/_telltale-agent UniqueID 497",
 	} {
 		if !strings.Contains(all, want) {
 			t.Errorf("missing %q in:\n%s", want, all)
@@ -69,16 +71,50 @@ func TestEnsureUserLocksAnExistingAccount(t *testing.T) {
 		call := name + " " + strings.Join(args, " ")
 		calls = append(calls, call)
 		if call == "dscl . -read /Users/_telltale-agent UniqueID PrimaryGroupID" {
-			return "PrimaryGroupID: 302\nUniqueID: 302\n", nil
+			return "PrimaryGroupID: 450\nUniqueID: 450\n", nil
 		}
 		return "", nil
 	}
 	uid, gid, created, err := ensureUser()
-	if err != nil || created || uid != 302 || gid != 302 {
+	if err != nil || created || uid != 450 || gid != 450 {
 		t.Fatalf("ensureUser = %d, %d, %v, %v", uid, gid, created, err)
 	}
 	if !slices.Contains(calls, "dscl . -create /Users/_telltale-agent Password *") {
 		t.Errorf("existing user not given the password *: %q", calls)
+	}
+	for _, c := range calls {
+		if strings.Contains(c, "UniqueID 4") {
+			t.Errorf("account at a safe ID was moved: %q", c)
+		}
+	}
+}
+
+// A v0.2.7 or older Agent took the lowest free ID, 305 on many Macs, which
+// macOS 27 gave to _spinandd, deleting the Agent's user on upgrade.
+func TestEnsureUserMovesAnAccountOutOfApplesRange(t *testing.T) {
+	calls := fakeDSCL(t)
+	orig := command
+	command = func(name string, args ...string) (string, error) {
+		if strings.Join(args, " ") == ". -read /Users/_telltale-agent UniqueID PrimaryGroupID" {
+			*calls = append(*calls, "read")
+			return "PrimaryGroupID: 305\nUniqueID: 305\n", nil
+		}
+		return orig(name, args...)
+	}
+	uid, gid, created, err := ensureUser()
+	if err != nil || created || uid != 497 || gid != 497 {
+		t.Fatalf("ensureUser = %d, %d, %v, %v; want 497, 497, false", uid, gid, created, err)
+	}
+	all := strings.Join(*calls, "\n")
+	for _, want := range []string{
+		"dscl . -create /Users/_telltale-agent UniqueID 497",
+		"dscl . -create /Users/_telltale-agent PrimaryGroupID 497",
+		"dscl . -create /Groups/_telltale-agent PrimaryGroupID 497",
+		"dscl . -create /Users/_telltale-agent Password *",
+	} {
+		if !strings.Contains(all, want) {
+			t.Errorf("missing %q in:\n%s", want, all)
+		}
 	}
 }
 

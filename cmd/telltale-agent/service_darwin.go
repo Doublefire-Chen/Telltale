@@ -25,8 +25,12 @@ const (
 	logPath      = "/var/log/telltale-agent.log"
 )
 
-// Daemon accounts on macOS use IDs below 500; this range avoids Apple's.
-const firstID, lastID = 300, 499
+// Daemon accounts on macOS use IDs below 500. Apple hands out its own
+// upward (macOS 27 reached 308), and a macOS upgrade deletes any local
+// account whose ID a new Apple one takes. So the Agent takes the highest
+// free ID, and moves an account made below safeID (by v0.2.7 or older,
+// which took the lowest) up out of Apple's way.
+const firstID, safeID, lastID = 300, 400, 499
 
 // command runs a system tool and returns its output; tests replace it.
 var command = func(name string, args ...string) (string, error) {
@@ -204,34 +208,65 @@ func ensureUser() (uid, gid int, created bool, err error) {
 		if err != nil {
 			return 0, 0, false, err
 		}
-		// Users made by v0.1.0 had no password set.
-		_, err = command("dscl", ".", "-create", "/Users/"+agentUser, "Password", "*")
-		return uid, gid, false, err
+		if uid >= safeID && gid >= safeID {
+			// Users made by v0.1.0 had no password set.
+			_, err = command("dscl", ".", "-create", "/Users/"+agentUser, "Password", "*")
+			return uid, gid, false, err
+		}
+		id, err := freeID()
+		if err != nil || id < safeID {
+			// Nowhere safer to go; keep the account where it is.
+			_, err = command("dscl", ".", "-create", "/Users/"+agentUser, "Password", "*")
+			return uid, gid, false, err
+		}
+		// The rest of the account is as before; the caller gives the
+		// config and log, the only files the Agent has, to the new IDs.
+		if err := setIDs(id, "/Users/"+agentUser, "Password", "*"); err != nil {
+			return 0, 0, false, err
+		}
+		fmt.Printf("moved user %s from ID %d to %d, out of the range macOS takes for its own\n", agentUser, uid, id)
+		return id, id, false, nil
 	}
+	// A macOS upgrade that took the user's ID deletes the user but may leave
+	// its group; the steps below reuse that group.
 	id, err := freeID()
 	if err != nil {
 		return 0, 0, false, err
 	}
+	err = setIDs(id,
+		"/Groups/"+agentUser, "RealName", "Telltale Agent",
+		"/Users/"+agentUser, "UserShell", "/usr/bin/false",
+		"/Users/"+agentUser, "NFSHomeDirectory", "/var/empty",
+		"/Users/"+agentUser, "Password", "*",
+		"/Users/"+agentUser, "RealName", "Telltale Agent",
+		"/Users/"+agentUser, "IsHidden", "1",
+	)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	return id, id, true, nil
+}
+
+// setIDs creates the daemon user and group if missing, gives both the ID id,
+// then sets each (record, key, value) triple in extra.
+func setIDs(id int, extra ...string) error {
 	sid := strconv.Itoa(id)
 	steps := [][]string{
 		{"-create", "/Groups/" + agentUser},
 		{"-create", "/Groups/" + agentUser, "PrimaryGroupID", sid},
-		{"-create", "/Groups/" + agentUser, "RealName", "Telltale Agent"},
 		{"-create", "/Users/" + agentUser},
 		{"-create", "/Users/" + agentUser, "UniqueID", sid},
 		{"-create", "/Users/" + agentUser, "PrimaryGroupID", sid},
-		{"-create", "/Users/" + agentUser, "UserShell", "/usr/bin/false"},
-		{"-create", "/Users/" + agentUser, "NFSHomeDirectory", "/var/empty"},
-		{"-create", "/Users/" + agentUser, "Password", "*"},
-		{"-create", "/Users/" + agentUser, "RealName", "Telltale Agent"},
-		{"-create", "/Users/" + agentUser, "IsHidden", "1"},
+	}
+	for i := 0; i+2 < len(extra); i += 3 {
+		steps = append(steps, []string{"-create", extra[i], extra[i+1], extra[i+2]})
 	}
 	for _, s := range steps {
 		if _, err := command("dscl", append([]string{"."}, s...)...); err != nil {
-			return 0, 0, false, err
+			return err
 		}
 	}
-	return id, id, true, nil
+	return nil
 }
 
 func parseIDs(out string) (uid, gid int, err error) {
@@ -257,7 +292,8 @@ func parseIDs(out string) (uid, gid int, err error) {
 	return uid, gid, nil
 }
 
-// freeID returns the lowest daemon-range ID used by no user and no group.
+// freeID returns the highest daemon-range ID used by no user and no group,
+// the one Apple is least likely to take for a daemon of its own.
 func freeID() (int, error) {
 	used := map[int]bool{}
 	for _, q := range [][]string{{"/Users", "UniqueID"}, {"/Groups", "PrimaryGroupID"}} {
@@ -273,7 +309,7 @@ func freeID() (int, error) {
 			}
 		}
 	}
-	for id := firstID; id <= lastID; id++ {
+	for id := lastID; id >= firstID; id-- {
 		if !used[id] {
 			return id, nil
 		}

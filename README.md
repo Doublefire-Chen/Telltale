@@ -164,6 +164,11 @@ Upgrade the Dashboard and the Agents independently, in any order. An Agent
 older than the Dashboard gets an "Agent outdated" badge and keeps working.
 Agents never update themselves.
 
+On macOS, upgrade Agents from v0.2.7 or older before upgrading macOS: they
+created their user at the lowest free daemon ID, which a new macOS can give
+to an Apple daemon, deleting the Agent's user so it no longer starts. If that
+already happened, running the installer again restores it.
+
 ## Documentation
 
 - [Configuration reference](docs/configuration.md)

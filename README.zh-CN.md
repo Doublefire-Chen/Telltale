@@ -141,6 +141,10 @@ OpenWrt 的 sysupgrade 不会保留 `/usr/local/bin` 和 `/etc/init.d/telltale-a
 Dashboard 和 Agent 可以分别升级，顺序随意。比 Dashboard 旧的 Agent 会显示
 "Agent 版本过旧" 标记，但仍能正常工作。Agent 永远不会自己更新。
 
+在 macOS 上，请先把 v0.2.7 及更早的 Agent 升级，再升级 macOS：它们用最小的空闲
+守护进程 ID 创建用户，而新版 macOS 可能把这个 ID 分给 Apple 自己的守护进程，
+导致 Agent 的用户被删除、无法启动。如果已经发生，重新运行安装脚本即可恢复。
+
 ## 文档
 
 - [配置参考](docs/configuration.md)
